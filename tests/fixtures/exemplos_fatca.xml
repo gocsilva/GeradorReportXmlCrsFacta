@@ -1,0 +1,632 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<FATCA_OECD xmlns="urn:oecd:ties:fatca:v2" xmlns:sfa="urn:oecd:ties:stffatcatypes:v2" xmlns:stf="urn:oecd:ties:stf:v4" xmlns:iso="urn:oecd:ties:isofatcatypes:v1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="urn:oecd:ties:fatca:v2 FatcaXML_v2.0.1.xsd" version="2.0">
+  <MessageSpec>
+    <sfa:SendingCompanyIN>FI107442</sfa:SendingCompanyIN>
+    <sfa:TransmittingCountry>KY</sfa:TransmittingCountry>
+    <sfa:ReceivingCountry>BR</sfa:ReceivingCountry>
+    <sfa:MessageType>FATCA</sfa:MessageType>
+    <sfa:MessageRefId>KY2025BRFI107442-BR-5ea4606f9fbe40f9986c4607cfa72a98</sfa:MessageRefId>
+    <sfa:ReportingPeriod>2025-12-31</sfa:ReportingPeriod>
+    <sfa:Timestamp>2026-07-28T17:36:06</sfa:Timestamp>
+  </MessageSpec>
+  <FATCA>
+    <ReportingFI>
+      <sfa:ResCountryCode>KY</sfa:ResCountryCode>
+      <sfa:TIN issuedBy="KY">FI107442</sfa:TIN>
+      <sfa:Name>BANCO BS2 S.A.</sfa:Name>
+      <sfa:Address>
+        <sfa:CountryCode>KY</sfa:CountryCode>
+        <sfa:AddressFree>South Church Street, 103, 5TH Floor, POB 1353, KY1-1108, George Town</sfa:AddressFree>
+      </sfa:Address>
+      <FilerCategory>FATCA601</FilerCategory>
+      <DocSpec>
+        <DocTypeIndic>FATCA1</DocTypeIndic>
+        <DocRefId>KY2025BRFI107442-BR-691525bb8c504e408015028b13386445</DocRefId>
+      </DocSpec>
+    </ReportingFI>
+    <ReportingGroup>
+      <AccountReport>
+        <DocSpec>
+          <DocTypeIndic>FATCA1</DocTypeIndic>
+          <DocRefId>KY2025BRFI107442-BR-9d01067cce7b4eb6884013a929f080bc</DocRefId>
+        </DocSpec>
+        <AccountNumber AcctNumberType="OECD602">11917679</AccountNumber>
+        <AccountHolder>
+          <Individual>
+            <sfa:ResCountryCode>BR</sfa:ResCountryCode>
+            <sfa:TIN>6360698501</sfa:TIN>
+            <sfa:Name>
+              <sfa:FirstName>Eduarda</sfa:FirstName>
+              <sfa:LastName>Bezerra Da Silva</sfa:LastName>
+            </sfa:Name>
+            <sfa:Address>
+              <sfa:CountryCode>BR</sfa:CountryCode>
+              <sfa:AddressFree>Rua Comendador Pereira da Silva, 45, Brotas, Salvador, BA, BR</sfa:AddressFree>
+            </sfa:Address>
+          </Individual>
+        </AccountHolder>
+        <AccountBalance currCode="BRL">155.73</AccountBalance>
+      </AccountReport>
+      <AccountReport>
+        <DocSpec>
+          <DocTypeIndic>FATCA1</DocTypeIndic>
+          <DocRefId>KY2025BRFI107442-BR-21cd2a7215204da2ba53b05aa0f7b406</DocRefId>
+        </DocSpec>
+        <AccountNumber AcctNumberType="OECD602">11904909</AccountNumber>
+        <AccountHolder>
+          <Individual>
+            <sfa:ResCountryCode>BR</sfa:ResCountryCode>
+            <sfa:TIN>9030562595</sfa:TIN>
+            <sfa:Name>
+              <sfa:FirstName>Hugo</sfa:FirstName>
+              <sfa:LastName>Dos Santos Pinheiro</sfa:LastName>
+            </sfa:Name>
+            <sfa:Address>
+              <sfa:CountryCode>BR</sfa:CountryCode>
+              <sfa:AddressFree>Rua Rio Branco, 29, Casa, Brotas, Salvador, BA, BR</sfa:AddressFree>
+            </sfa:Address>
+          </Individual>
+        </AccountHolder>
+        <AccountBalance currCode="BRL">54.18</AccountBalance>
+      </AccountReport>
+      <AccountReport>
+        <DocSpec>
+          <DocTypeIndic>FATCA1</DocTypeIndic>
+          <DocRefId>KY2025BRFI107442-BR-51c0e9278ab64e739184c707b7b59477</DocRefId>
+        </DocSpec>
+        <AccountNumber AcctNumberType="OECD602">11625643</AccountNumber>
+        <AccountHolder>
+          <Individual>
+            <sfa:ResCountryCode>BR</sfa:ResCountryCode>
+            <sfa:TIN>16011329721</sfa:TIN>
+            <sfa:Name>
+              <sfa:FirstName>Larissa</sfa:FirstName>
+              <sfa:LastName>Leite Miguel</sfa:LastName>
+            </sfa:Name>
+            <sfa:Address>
+              <sfa:CountryCode>BR</sfa:CountryCode>
+              <sfa:AddressFree>rua Florismundo decnop, 440, ap 206, Tavares, Santo Antônio de Pádua, RJ, BR</sfa:AddressFree>
+            </sfa:Address>
+          </Individual>
+        </AccountHolder>
+        <AccountBalance currCode="BRL">-0.52</AccountBalance>
+      </AccountReport>
+      <AccountReport>
+        <DocSpec>
+          <DocTypeIndic>FATCA1</DocTypeIndic>
+          <DocRefId>KY2025BRFI107442-BR-fa68e28de79049d693b189debd18fc64</DocRefId>
+        </DocSpec>
+        <AccountNumber AcctNumberType="OECD602">7332823</AccountNumber>
+        <AccountHolder>
+          <Organisation>
+            <sfa:ResCountryCode>BR</sfa:ResCountryCode>
+            <sfa:TIN>7859988000198</sfa:TIN>
+            <sfa:Name>BP ALIANCA INFORMATICA LTDA</sfa:Name>
+            <sfa:Address>
+              <sfa:CountryCode>BR</sfa:CountryCode>
+              <sfa:AddressFree>Rua Washington Luis 9, 9, Centro, Rio de Janeiro, RJ, BR</sfa:AddressFree>
+            </sfa:Address>
+          </Organisation>
+          <AcctHolderType>FATCA101</AcctHolderType>
+        </AccountHolder>
+        <AccountBalance currCode="BRL">0.00</AccountBalance>
+      </AccountReport>
+      <AccountReport>
+        <DocSpec>
+          <DocTypeIndic>FATCA1</DocTypeIndic>
+          <DocRefId>KY2025BRFI107442-BR-4de75a36206f4600b3fa173c00427c49</DocRefId>
+        </DocSpec>
+        <AccountNumber AcctNumberType="OECD602">6115292</AccountNumber>
+        <AccountHolder>
+          <Organisation>
+            <sfa:ResCountryCode>BR</sfa:ResCountryCode>
+            <sfa:TIN>38218085000151</sfa:TIN>
+            <sfa:Name>David Lucas Da Rosa</sfa:Name>
+            <sfa:Address>
+              <sfa:CountryCode>BR</sfa:CountryCode>
+              <sfa:AddressFree>RUA JAMANARI, 15, VILA ANDRADE, sao paulo, SP, BR</sfa:AddressFree>
+            </sfa:Address>
+          </Organisation>
+          <AcctHolderType>FATCA101</AcctHolderType>
+        </AccountHolder>
+        <AccountBalance currCode="BRL">0.00</AccountBalance>
+      </AccountReport>
+      <AccountReport>
+        <DocSpec>
+          <DocTypeIndic>FATCA1</DocTypeIndic>
+          <DocRefId>KY2025BRFI107442-BR-3388c03f4abf4632ba039c8fa74335f6</DocRefId>
+        </DocSpec>
+        <AccountNumber AcctNumberType="OECD602">11080779</AccountNumber>
+        <AccountHolder>
+          <Organisation>
+            <sfa:ResCountryCode>BR</sfa:ResCountryCode>
+            <sfa:TIN>38254083000118</sfa:TIN>
+            <sfa:Name>REDBOX TECHNOLOGY LTDA</sfa:Name>
+            <sfa:Address>
+              <sfa:CountryCode>BR</sfa:CountryCode>
+              <sfa:AddressFree>Rua Luiz Figueiredo Filho, 1910, Vila Nossa Senhor, SÃO JOSÉ DO RIO PRETO, SP, BR</sfa:AddressFree>
+            </sfa:Address>
+          </Organisation>
+          <AcctHolderType>FATCA101</AcctHolderType>
+        </AccountHolder>
+        <AccountBalance currCode="BRL">0.00</AccountBalance>
+      </AccountReport>
+      <AccountReport>
+        <DocSpec>
+          <DocTypeIndic>FATCA1</DocTypeIndic>
+          <DocRefId>KY2025BRFI107442-BR-0c0d152531bc418cbecd9ec963ffbbee</DocRefId>
+        </DocSpec>
+        <AccountNumber AcctNumberType="OECD602">5427185</AccountNumber>
+        <AccountHolder>
+          <Organisation>
+            <sfa:ResCountryCode>BR</sfa:ResCountryCode>
+            <sfa:TIN>37593565000130</sfa:TIN>
+            <sfa:Name>CLINICA DUETO PSICANALISE EIRELI</sfa:Name>
+            <sfa:Address>
+              <sfa:CountryCode>BR</sfa:CountryCode>
+              <sfa:AddressFree>Rua Jose Jannarelli, 199, Vila Progredior, São Paulo, SP, BR</sfa:AddressFree>
+            </sfa:Address>
+          </Organisation>
+          <AcctHolderType>FATCA101</AcctHolderType>
+        </AccountHolder>
+        <AccountBalance currCode="BRL">0.00</AccountBalance>
+      </AccountReport>
+      <AccountReport>
+        <DocSpec>
+          <DocTypeIndic>FATCA1</DocTypeIndic>
+          <DocRefId>KY2025BRFI107442-BR-5bf887076f7b4be0ade8d06eb64df2d6</DocRefId>
+        </DocSpec>
+        <AccountNumber AcctNumberType="OECD602">8451885</AccountNumber>
+        <AccountHolder>
+          <Organisation>
+            <sfa:ResCountryCode>BR</sfa:ResCountryCode>
+            <sfa:TIN>29958644000179</sfa:TIN>
+            <sfa:Name>MERLING PROJETOS DE MOLDES LTDA</sfa:Name>
+            <sfa:Address>
+              <sfa:CountryCode>BR</sfa:CountryCode>
+              <sfa:AddressFree>Rua Prefeito Helmuth Fallgatter, 2432, Boa Vista, Joinville, SC, BR</sfa:AddressFree>
+            </sfa:Address>
+          </Organisation>
+          <AcctHolderType>FATCA101</AcctHolderType>
+        </AccountHolder>
+        <AccountBalance currCode="BRL">0.00</AccountBalance>
+      </AccountReport>
+      <AccountReport>
+        <DocSpec>
+          <DocTypeIndic>FATCA1</DocTypeIndic>
+          <DocRefId>KY2025BRFI107442-BR-6ed590d9c2a24dda916bf488f6368c3e</DocRefId>
+        </DocSpec>
+        <AccountNumber AcctNumberType="OECD602">11896035</AccountNumber>
+        <AccountHolder>
+          <Individual>
+            <sfa:ResCountryCode>BR</sfa:ResCountryCode>
+            <sfa:TIN>2264176032</sfa:TIN>
+            <sfa:Name>
+              <sfa:FirstName>CAMILA</sfa:FirstName>
+              <sfa:LastName>PAIXAO DE MEIRA</sfa:LastName>
+            </sfa:Name>
+            <sfa:Address>
+              <sfa:CountryCode>BR</sfa:CountryCode>
+              <sfa:AddressFree>Rua Doutor Barbosa Gonçalves, 777, 1006, Chácara d, Porto Alegre, RS, BR</sfa:AddressFree>
+            </sfa:Address>
+          </Individual>
+        </AccountHolder>
+        <AccountBalance currCode="BRL">0.00</AccountBalance>
+      </AccountReport>
+      <AccountReport>
+        <DocSpec>
+          <DocTypeIndic>FATCA1</DocTypeIndic>
+          <DocRefId>KY2025BRFI107442-BR-590b62b982694979ba40b3ce69ddbd65</DocRefId>
+        </DocSpec>
+        <AccountNumber AcctNumberType="OECD602">11889811</AccountNumber>
+        <AccountHolder>
+          <Organisation>
+            <sfa:ResCountryCode>BR</sfa:ResCountryCode>
+            <sfa:TIN>62827331000157</sfa:TIN>
+            <sfa:Name>BRUNO CESAR JAIME SOCIEDADE INDIVIDUAL DE ADVOCACIA</sfa:Name>
+            <sfa:Address>
+              <sfa:CountryCode>BR</sfa:CountryCode>
+              <sfa:AddressFree>Rua 104, 135, Setor Sul, Goiânia, GO, BR</sfa:AddressFree>
+            </sfa:Address>
+          </Organisation>
+          <AcctHolderType>FATCA101</AcctHolderType>
+        </AccountHolder>
+        <AccountBalance currCode="BRL">0.00</AccountBalance>
+      </AccountReport>
+      <AccountReport>
+        <DocSpec>
+          <DocTypeIndic>FATCA1</DocTypeIndic>
+          <DocRefId>KY2025BRFI107442-BR-5e18adb79f8148efb9f7e658b995adba</DocRefId>
+        </DocSpec>
+        <AccountNumber AcctNumberType="OECD602">9447695</AccountNumber>
+        <AccountHolder>
+          <Organisation>
+            <sfa:ResCountryCode>BR</sfa:ResCountryCode>
+            <sfa:TIN>26102817000164</sfa:TIN>
+            <sfa:Name>JESSICA SAURINI ANDRADE PRODUCOES E EVENTOS</sfa:Name>
+            <sfa:Address>
+              <sfa:CountryCode>BR</sfa:CountryCode>
+              <sfa:AddressFree>RUA DOUTOR NETO DE ARAÚJO, 163, Vila Mariana, SÃO PAULO, SP, BR</sfa:AddressFree>
+            </sfa:Address>
+          </Organisation>
+          <AcctHolderType>FATCA101</AcctHolderType>
+        </AccountHolder>
+        <AccountBalance currCode="BRL">0.00</AccountBalance>
+      </AccountReport>
+      <AccountReport>
+        <DocSpec>
+          <DocTypeIndic>FATCA1</DocTypeIndic>
+          <DocRefId>KY2025BRFI107442-BR-e82b9471cde742888aad377489b01e7a</DocRefId>
+        </DocSpec>
+        <AccountNumber AcctNumberType="OECD602">10071539</AccountNumber>
+        <AccountHolder>
+          <Individual>
+            <sfa:ResCountryCode>BR</sfa:ResCountryCode>
+            <sfa:TIN>7415707850</sfa:TIN>
+            <sfa:Name>
+              <sfa:FirstName>PAULO</sfa:FirstName>
+              <sfa:LastName>MARCIO DE OLIVEIRA NEVES</sfa:LastName>
+            </sfa:Name>
+            <sfa:Address>
+              <sfa:CountryCode>BR</sfa:CountryCode>
+              <sfa:AddressFree>Luiz Oliveira, 327, apto 231, Parque das Flores, Campinas, SP, BR</sfa:AddressFree>
+            </sfa:Address>
+          </Individual>
+        </AccountHolder>
+        <AccountBalance currCode="BRL">257.61</AccountBalance>
+      </AccountReport>
+      <AccountReport>
+        <DocSpec>
+          <DocTypeIndic>FATCA1</DocTypeIndic>
+          <DocRefId>KY2025BRFI107442-BR-cc4520c205754ba1919996036723375d</DocRefId>
+        </DocSpec>
+        <AccountNumber AcctNumberType="OECD602">2639467</AccountNumber>
+        <AccountHolder>
+          <Individual>
+            <sfa:ResCountryCode>BR</sfa:ResCountryCode>
+            <sfa:TIN>10460798758</sfa:TIN>
+            <sfa:Name>
+              <sfa:FirstName>JOAO</sfa:FirstName>
+              <sfa:LastName>ERICK DE MATTOS FERNANDES</sfa:LastName>
+            </sfa:Name>
+            <sfa:Address>
+              <sfa:CountryCode>BR</sfa:CountryCode>
+              <sfa:AddressFree>Avenida Jornalista Alberto Francisco Torres, 55, 8, Niterói, RJ, BR</sfa:AddressFree>
+            </sfa:Address>
+          </Individual>
+        </AccountHolder>
+        <AccountBalance currCode="BRL">0.00</AccountBalance>
+      </AccountReport>
+      <AccountReport>
+        <DocSpec>
+          <DocTypeIndic>FATCA1</DocTypeIndic>
+          <DocRefId>KY2025BRFI107442-BR-5a9999e7233246a98ce2d0b76e39282f</DocRefId>
+        </DocSpec>
+        <AccountNumber AcctNumberType="OECD602">10456694</AccountNumber>
+        <AccountHolder>
+          <Organisation>
+            <sfa:ResCountryCode>BR</sfa:ResCountryCode>
+            <sfa:TIN>35302018000122</sfa:TIN>
+            <sfa:Name>L E TEDESQUE TECNOLOGIA</sfa:Name>
+            <sfa:Address>
+              <sfa:CountryCode>BR</sfa:CountryCode>
+              <sfa:AddressFree>Av Dom Pedro II, 1426, Centro, PORTO REAL, RJ, BR</sfa:AddressFree>
+            </sfa:Address>
+          </Organisation>
+          <AcctHolderType>FATCA101</AcctHolderType>
+        </AccountHolder>
+        <AccountBalance currCode="BRL">0.00</AccountBalance>
+      </AccountReport>
+      <AccountReport>
+        <DocSpec>
+          <DocTypeIndic>FATCA1</DocTypeIndic>
+          <DocRefId>KY2025BRFI107442-BR-a5dcef556795455b9155648b0889ff99</DocRefId>
+        </DocSpec>
+        <AccountNumber AcctNumberType="OECD602">11751738</AccountNumber>
+        <AccountHolder>
+          <Individual>
+            <sfa:ResCountryCode>BR</sfa:ResCountryCode>
+            <sfa:TIN>252851064</sfa:TIN>
+            <sfa:Name>
+              <sfa:FirstName>CAROLINA</sfa:FirstName>
+              <sfa:LastName>MARTINS BASSO</sfa:LastName>
+            </sfa:Name>
+            <sfa:Address>
+              <sfa:CountryCode>BR</sfa:CountryCode>
+              <sfa:AddressFree>Rua Dona Eugênia, 1227, 803, Santa Cecília, Porto Alegre, RS, BR</sfa:AddressFree>
+            </sfa:Address>
+          </Individual>
+        </AccountHolder>
+        <AccountBalance currCode="BRL">0.66</AccountBalance>
+      </AccountReport>
+      <AccountReport>
+        <DocSpec>
+          <DocTypeIndic>FATCA1</DocTypeIndic>
+          <DocRefId>KY2025BRFI107442-BR-9f3be4d83d3b4cf794c0225c58c654da</DocRefId>
+        </DocSpec>
+        <AccountNumber AcctNumberType="OECD602">9333487</AccountNumber>
+        <AccountHolder>
+          <Individual>
+            <sfa:ResCountryCode>BR</sfa:ResCountryCode>
+            <sfa:TIN>22258279828</sfa:TIN>
+            <sfa:Name>
+              <sfa:FirstName>AKEMI</sfa:FirstName>
+              <sfa:LastName>CAMILA DE OLIVEIRA</sfa:LastName>
+            </sfa:Name>
+            <sfa:Address>
+              <sfa:CountryCode>BR</sfa:CountryCode>
+              <sfa:AddressFree>Rua Engenheiro Francisco Bicalho, 195, Parque São, São Paulo, SP, BR</sfa:AddressFree>
+            </sfa:Address>
+          </Individual>
+        </AccountHolder>
+        <AccountBalance currCode="BRL">4243.71</AccountBalance>
+      </AccountReport>
+      <AccountReport>
+        <DocSpec>
+          <DocTypeIndic>FATCA1</DocTypeIndic>
+          <DocRefId>KY2025BRFI107442-BR-9193372724784a35bb13ae1170896468</DocRefId>
+        </DocSpec>
+        <AccountNumber AcctNumberType="OECD602">9918418</AccountNumber>
+        <AccountHolder>
+          <Organisation>
+            <sfa:ResCountryCode>BR</sfa:ResCountryCode>
+            <sfa:TIN>42881947000107</sfa:TIN>
+            <sfa:Name>CABOCLO VENTANIA DE ARUANDA ARTIGOS DE FE COMERCIO DE ARTIGO</sfa:Name>
+            <sfa:Address>
+              <sfa:CountryCode>BR</sfa:CountryCode>
+              <sfa:AddressFree>Rua Costa Barros, 425, Vila Alpina, SÃO PAULO, SP, BR</sfa:AddressFree>
+            </sfa:Address>
+          </Organisation>
+          <AcctHolderType>FATCA101</AcctHolderType>
+        </AccountHolder>
+        <AccountBalance currCode="BRL">2680.85</AccountBalance>
+      </AccountReport>
+      <AccountReport>
+        <DocSpec>
+          <DocTypeIndic>FATCA1</DocTypeIndic>
+          <DocRefId>KY2025BRFI107442-BR-b1a5c55e7ef94382b67ba3c65df979e1</DocRefId>
+        </DocSpec>
+        <AccountNumber AcctNumberType="OECD602">11080710</AccountNumber>
+        <AccountHolder>
+          <Organisation>
+            <sfa:ResCountryCode>BR</sfa:ResCountryCode>
+            <sfa:TIN>48495530000184</sfa:TIN>
+            <sfa:Name>BF DESENVOLVIMENTO E CONSULTORIA DE TI LTDA</sfa:Name>
+            <sfa:Address>
+              <sfa:CountryCode>BR</sfa:CountryCode>
+              <sfa:AddressFree>Rua Conselheiro Paula Sousa, 1190, Cidade Universi, CAMPINAS, SP, BR</sfa:AddressFree>
+            </sfa:Address>
+          </Organisation>
+          <AcctHolderType>FATCA101</AcctHolderType>
+        </AccountHolder>
+        <AccountBalance currCode="BRL">3363.00</AccountBalance>
+      </AccountReport>
+      <AccountReport>
+        <DocSpec>
+          <DocTypeIndic>FATCA1</DocTypeIndic>
+          <DocRefId>KY2025BRFI107442-BR-fec6aabda90e42d48f52055c69b06693</DocRefId>
+        </DocSpec>
+        <AccountNumber AcctNumberType="OECD602">9020616</AccountNumber>
+        <AccountHolder>
+          <Organisation>
+            <sfa:ResCountryCode>BR</sfa:ResCountryCode>
+            <sfa:TIN>31979529000122</sfa:TIN>
+            <sfa:Name>SOS INFORMATICA LTDA</sfa:Name>
+            <sfa:Address>
+              <sfa:CountryCode>BR</sfa:CountryCode>
+              <sfa:AddressFree>Avenida Ministro Ivan Lins, 460, Barra da Tijuca, Rio de Janeiro, RJ, BR</sfa:AddressFree>
+            </sfa:Address>
+          </Organisation>
+          <AcctHolderType>FATCA101</AcctHolderType>
+        </AccountHolder>
+        <AccountBalance currCode="BRL">0.00</AccountBalance>
+      </AccountReport>
+      <AccountReport>
+        <DocSpec>
+          <DocTypeIndic>FATCA1</DocTypeIndic>
+          <DocRefId>KY2025BRFI107442-BR-a607a59c8c7c40998665ebbc5aafa1d9</DocRefId>
+        </DocSpec>
+        <AccountNumber AcctNumberType="OECD602">5911389</AccountNumber>
+        <AccountHolder>
+          <Organisation>
+            <sfa:ResCountryCode>BR</sfa:ResCountryCode>
+            <sfa:TIN>35091873000131</sfa:TIN>
+            <sfa:Name>Adriano Sousa Da Silva Mei</sfa:Name>
+            <sfa:Address>
+              <sfa:CountryCode>BR</sfa:CountryCode>
+              <sfa:AddressFree>Rua Sao Carlos, 235, Parque Paulista, Franco da Rocha, SP, BR</sfa:AddressFree>
+            </sfa:Address>
+          </Organisation>
+          <AcctHolderType>FATCA101</AcctHolderType>
+        </AccountHolder>
+        <AccountBalance currCode="BRL">0.00</AccountBalance>
+      </AccountReport>
+      <AccountReport>
+        <DocSpec>
+          <DocTypeIndic>FATCA1</DocTypeIndic>
+          <DocRefId>KY2025BRFI107442-BR-a5c92e5e1f4b472b934091bce1042b2f</DocRefId>
+        </DocSpec>
+        <AccountNumber AcctNumberType="OECD602">4759621</AccountNumber>
+        <AccountHolder>
+          <Organisation>
+            <sfa:ResCountryCode>BR</sfa:ResCountryCode>
+            <sfa:TIN>37147763000170</sfa:TIN>
+            <sfa:Name>BLUBRAIN TECHNOLOGY PESQUISA E DESENVOLVIMENTO EM CIENCIAS S</sfa:Name>
+            <sfa:Address>
+              <sfa:CountryCode>BR</sfa:CountryCode>
+              <sfa:AddressFree>Avenida Getulio Vargas, 1492, Savassi, BELO HORIZONTE, MG, BR</sfa:AddressFree>
+            </sfa:Address>
+          </Organisation>
+          <AcctHolderType>FATCA101</AcctHolderType>
+        </AccountHolder>
+        <AccountBalance currCode="BRL">0.00</AccountBalance>
+      </AccountReport>
+      <AccountReport>
+        <DocSpec>
+          <DocTypeIndic>FATCA1</DocTypeIndic>
+          <DocRefId>KY2025BRFI107442-BR-ec5a428301a74c78900cc9cbd703786c</DocRefId>
+        </DocSpec>
+        <AccountNumber AcctNumberType="OECD602">11729554</AccountNumber>
+        <AccountHolder>
+          <Individual>
+            <sfa:ResCountryCode>BR</sfa:ResCountryCode>
+            <sfa:TIN>7204543360</sfa:TIN>
+            <sfa:Name>
+              <sfa:FirstName>Johnata</sfa:FirstName>
+              <sfa:LastName>Ferreira Leite De Oliveira</sfa:LastName>
+            </sfa:Name>
+            <sfa:Address>
+              <sfa:CountryCode>BR</sfa:CountryCode>
+              <sfa:AddressFree>Rua do Catolé, 151, Duplex, Jardim das Oliveiras, Fortaleza, CE, BR</sfa:AddressFree>
+            </sfa:Address>
+          </Individual>
+        </AccountHolder>
+        <AccountBalance currCode="BRL">11.27</AccountBalance>
+      </AccountReport>
+      <AccountReport>
+        <DocSpec>
+          <DocTypeIndic>FATCA1</DocTypeIndic>
+          <DocRefId>KY2025BRFI107442-BR-e43a44929fa84d80a4e6a3d12a4cfa54</DocRefId>
+        </DocSpec>
+        <AccountNumber AcctNumberType="OECD602">10710388</AccountNumber>
+        <AccountHolder>
+          <Organisation>
+            <sfa:ResCountryCode>BR</sfa:ResCountryCode>
+            <sfa:TIN>41250748000120</sfa:TIN>
+            <sfa:Name>K P F GAMAS CONSULTORIA</sfa:Name>
+            <sfa:Address>
+              <sfa:CountryCode>BR</sfa:CountryCode>
+              <sfa:AddressFree>Avenida Engenheiro Luiz Carlos Berrini, 1748, Cida, SÃO PAULO, SP, BR</sfa:AddressFree>
+            </sfa:Address>
+          </Organisation>
+          <AcctHolderType>FATCA101</AcctHolderType>
+        </AccountHolder>
+        <AccountBalance currCode="BRL">0.00</AccountBalance>
+      </AccountReport>
+      <AccountReport>
+        <DocSpec>
+          <DocTypeIndic>FATCA1</DocTypeIndic>
+          <DocRefId>KY2025BRFI107442-BR-23f88d7fa3e24d77b04ab1196bd934d9</DocRefId>
+        </DocSpec>
+        <AccountNumber AcctNumberType="OECD602">11069295</AccountNumber>
+        <AccountHolder>
+          <Individual>
+            <sfa:ResCountryCode>BR</sfa:ResCountryCode>
+            <sfa:TIN>8564262886</sfa:TIN>
+            <sfa:Name>
+              <sfa:FirstName>Marilene</sfa:FirstName>
+              <sfa:LastName>Letange</sfa:LastName>
+            </sfa:Name>
+            <sfa:Address>
+              <sfa:CountryCode>BR</sfa:CountryCode>
+              <sfa:AddressFree>Rua Trajano Reis, 185, Ap101 B1, Jardim das Verten, São Paulo, SP, BR</sfa:AddressFree>
+            </sfa:Address>
+          </Individual>
+        </AccountHolder>
+        <AccountBalance currCode="BRL">0.06</AccountBalance>
+      </AccountReport>
+      <AccountReport>
+        <DocSpec>
+          <DocTypeIndic>FATCA1</DocTypeIndic>
+          <DocRefId>KY2025BRFI107442-BR-4f3df5e7d61547619a79b21720d4b17d</DocRefId>
+        </DocSpec>
+        <AccountNumber AcctNumberType="OECD602">8789037</AccountNumber>
+        <AccountHolder>
+          <Organisation>
+            <sfa:ResCountryCode>BR</sfa:ResCountryCode>
+            <sfa:TIN>34875041000143</sfa:TIN>
+            <sfa:Name>DESPACHADOS EMPREENDIMENTOS IMOBILIARIOS LTDA</sfa:Name>
+            <sfa:Address>
+              <sfa:CountryCode>BR</sfa:CountryCode>
+              <sfa:AddressFree>Rua Barao de Petropolis, 214, Rio Comprido, RIO DE JANEIRO, RJ, BR</sfa:AddressFree>
+            </sfa:Address>
+          </Organisation>
+          <AcctHolderType>FATCA101</AcctHolderType>
+        </AccountHolder>
+        <AccountBalance currCode="BRL">0.00</AccountBalance>
+      </AccountReport>
+      <AccountReport>
+        <DocSpec>
+          <DocTypeIndic>FATCA1</DocTypeIndic>
+          <DocRefId>KY2025BRFI107442-BR-74ac14c4157f4993a000e83cd75bc978</DocRefId>
+        </DocSpec>
+        <AccountNumber AcctNumberType="OECD602">10098879</AccountNumber>
+        <AccountHolder>
+          <Organisation>
+            <sfa:ResCountryCode>BR</sfa:ResCountryCode>
+            <sfa:TIN>36782251000112</sfa:TIN>
+            <sfa:Name>DANIEL POPP COELHO LTDA</sfa:Name>
+            <sfa:Address>
+              <sfa:CountryCode>BR</sfa:CountryCode>
+              <sfa:AddressFree>Avenida Pedra Branca, 1325, Pedra Branca, PALHOÇA, SC, BR</sfa:AddressFree>
+            </sfa:Address>
+          </Organisation>
+          <AcctHolderType>FATCA101</AcctHolderType>
+        </AccountHolder>
+        <AccountBalance currCode="BRL">0.00</AccountBalance>
+      </AccountReport>
+      <AccountReport>
+        <DocSpec>
+          <DocTypeIndic>FATCA1</DocTypeIndic>
+          <DocRefId>KY2025BRFI107442-BR-810a1bdaf7e041518d9cefeb2f841abb</DocRefId>
+        </DocSpec>
+        <AccountNumber AcctNumberType="OECD602">10185682</AccountNumber>
+        <AccountHolder>
+          <Organisation>
+            <sfa:ResCountryCode>BR</sfa:ResCountryCode>
+            <sfa:TIN>44438450000136</sfa:TIN>
+            <sfa:Name>Tier 3 Aplicativos LTDA</sfa:Name>
+            <sfa:Address>
+              <sfa:CountryCode>BR</sfa:CountryCode>
+              <sfa:AddressFree>Fazenda Morada do Morro Grande, 50, Zona Rural, Carmo da Cachoeira, MG, BR</sfa:AddressFree>
+            </sfa:Address>
+          </Organisation>
+          <AcctHolderType>FATCA101</AcctHolderType>
+        </AccountHolder>
+        <AccountBalance currCode="BRL">0.00</AccountBalance>
+      </AccountReport>
+      <AccountReport>
+        <DocSpec>
+          <DocTypeIndic>FATCA1</DocTypeIndic>
+          <DocRefId>KY2025BRFI107442-BR-be34c165714c44858c164f0e039d3723</DocRefId>
+        </DocSpec>
+        <AccountNumber AcctNumberType="OECD602">11695081</AccountNumber>
+        <AccountHolder>
+          <Individual>
+            <sfa:ResCountryCode>BR</sfa:ResCountryCode>
+            <sfa:TIN>588667013</sfa:TIN>
+            <sfa:Name>
+              <sfa:FirstName>SUELEN</sfa:FirstName>
+              <sfa:LastName>HERNANDES MORAES</sfa:LastName>
+            </sfa:Name>
+            <sfa:Address>
+              <sfa:CountryCode>BR</sfa:CountryCode>
+              <sfa:AddressFree>Rua Trinta e Oito, 151, Areal, Pelotas, RS, BR</sfa:AddressFree>
+            </sfa:Address>
+          </Individual>
+        </AccountHolder>
+        <AccountBalance currCode="BRL">0.00</AccountBalance>
+      </AccountReport>
+      <AccountReport>
+        <DocSpec>
+          <DocTypeIndic>FATCA1</DocTypeIndic>
+          <DocRefId>KY2025BRFI107442-BR-dcd46372729340efbe76d57724452caf</DocRefId>
+        </DocSpec>
+        <AccountNumber AcctNumberType="OECD602">6320074</AccountNumber>
+        <AccountHolder>
+          <Organisation>
+            <sfa:ResCountryCode>BR</sfa:ResCountryCode>
+            <sfa:TIN>36619279000133</sfa:TIN>
+            <sfa:Name>N Unterstell Consultoria Em Meio Ambiente Ltda</sfa:Name>
+            <sfa:Address>
+              <sfa:CountryCode>BR</sfa:CountryCode>
+              <sfa:AddressFree>Rua Frei Solano, 18, Lagoa, Rio de Janeiro, RJ, BR</sfa:AddressFree>
+            </sfa:Address>
+          </Organisation>
+          <AcctHolderType>FATCA101</AcctHolderType>
+        </AccountHolder>
+        <AccountBalance currCode="BRL">-264.78</AccountBalance>
+      </AccountReport>
+    </ReportingGroup>
+  </FATCA>
+</FATCA_OECD>

@@ -1,0 +1,719 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<CRS_OECD xmlns="urn:oecd:ties:crs:v3" xmlns:stf="urn:oecd:ties:crsstf:v5" xmlns:cfc="urn:oecd:ties:commontypesfatcacrs:v2" xmlns:iso="urn:oecd:ties:isocrstypes:v1" xmlns:ftc="urn:oecd:ties:fatca:v1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="urn:oecd:ties:crs:v3 CrsXML_v3.0.xsd" version="3.0">
+  <MessageSpec>
+    <SendingCompanyIN>FI107442</SendingCompanyIN>
+    <TransmittingCountry>KY</TransmittingCountry>
+    <ReceivingCountry>BR</ReceivingCountry>
+    <MessageType>CRS</MessageType>
+    <MessageRefId>KY2025BRFI107442-BR-f95673fade914ce68d2219fa9820987c</MessageRefId>
+    <MessageTypeIndic>CRS701</MessageTypeIndic>
+    <ReportingPeriod>2025-12-31</ReportingPeriod>
+    <Timestamp>2026-07-28T17:36:06</Timestamp>
+  </MessageSpec>
+  <CrsBody>
+    <ReportingFI>
+      <ResCountryCode>KY</ResCountryCode>
+      <IN issuedBy="KY">FI107442</IN>
+      <Name>BANCO BS2 S.A.</Name>
+      <Address>
+        <cfc:CountryCode>KY</cfc:CountryCode>
+        <cfc:AddressFree>South Church Street, 103, 5TH Floor, POB 1353, KY1-1108, George Town</cfc:AddressFree>
+      </Address>
+      <DocSpec>
+        <stf:DocTypeIndic>OECD1</stf:DocTypeIndic>
+        <stf:DocRefId>KY2025BRFI107442-BR-c852e39a7bcf4d61ad2bb6e9bd4b2174</stf:DocRefId>
+      </DocSpec>
+    </ReportingFI>
+    <ReportingGroup>
+      <AccountReport>
+        <DocSpec>
+          <stf:DocTypeIndic>OECD1</stf:DocTypeIndic>
+          <stf:DocRefId>KY2025BRFI107442-BR-f59eac85cf124d56b7aedd53e33649cc</stf:DocRefId>
+        </DocSpec>
+        <AccountNumber AcctNumberType="OECD602">11917679</AccountNumber>
+        <AccountHolder>
+          <SelfCert>CRS901</SelfCert>
+          <Individual>
+            <ResCountryCode>BR</ResCountryCode>
+            <TIN>6360698501</TIN>
+            <Name>
+              <FirstName>Eduarda</FirstName>
+              <LastName>Bezerra Da Silva</LastName>
+            </Name>
+            <Address>
+              <cfc:CountryCode>BR</cfc:CountryCode>
+              <cfc:AddressFree>Rua Comendador Pereira da Silva, 45, Brotas, Salvador, BA, BR</cfc:AddressFree>
+            </Address>
+          </Individual>
+        </AccountHolder>
+        <AccountBalance currCode="BRL">155.73</AccountBalance>
+        <DDProcedure>CRS1201</DDProcedure>
+        <AccountType>CRS1101</AccountType>
+      </AccountReport>
+      <AccountReport>
+        <DocSpec>
+          <stf:DocTypeIndic>OECD1</stf:DocTypeIndic>
+          <stf:DocRefId>KY2025BRFI107442-BR-2d6ac1c0239f4cac8b945e8a6279471b</stf:DocRefId>
+        </DocSpec>
+        <AccountNumber AcctNumberType="OECD602">11904909</AccountNumber>
+        <AccountHolder>
+          <SelfCert>CRS901</SelfCert>
+          <Individual>
+            <ResCountryCode>BR</ResCountryCode>
+            <TIN>9030562595</TIN>
+            <Name>
+              <FirstName>Hugo</FirstName>
+              <LastName>Dos Santos Pinheiro</LastName>
+            </Name>
+            <Address>
+              <cfc:CountryCode>BR</cfc:CountryCode>
+              <cfc:AddressFree>Rua Rio Branco, 29, Casa, Brotas, Salvador, BA, BR</cfc:AddressFree>
+            </Address>
+          </Individual>
+        </AccountHolder>
+        <AccountBalance currCode="BRL">54.18</AccountBalance>
+        <DDProcedure>CRS1201</DDProcedure>
+        <AccountType>CRS1101</AccountType>
+      </AccountReport>
+      <AccountReport>
+        <DocSpec>
+          <stf:DocTypeIndic>OECD1</stf:DocTypeIndic>
+          <stf:DocRefId>KY2025BRFI107442-BR-83c7360d3c9b4f24b7b45a533cd43762</stf:DocRefId>
+        </DocSpec>
+        <AccountNumber AcctNumberType="OECD602">11625643</AccountNumber>
+        <AccountHolder>
+          <SelfCert>CRS901</SelfCert>
+          <Individual>
+            <ResCountryCode>BR</ResCountryCode>
+            <TIN>16011329721</TIN>
+            <Name>
+              <FirstName>Larissa</FirstName>
+              <LastName>Leite Miguel</LastName>
+            </Name>
+            <Address>
+              <cfc:CountryCode>BR</cfc:CountryCode>
+              <cfc:AddressFree>rua Florismundo decnop, 440, ap 206, Tavares, Santo Antônio de Pádua, RJ, BR</cfc:AddressFree>
+            </Address>
+          </Individual>
+        </AccountHolder>
+        <AccountBalance currCode="BRL">-0.52</AccountBalance>
+        <DDProcedure>CRS1201</DDProcedure>
+        <AccountType>CRS1101</AccountType>
+      </AccountReport>
+      <AccountReport>
+        <DocSpec>
+          <stf:DocTypeIndic>OECD1</stf:DocTypeIndic>
+          <stf:DocRefId>KY2025BRFI107442-BR-8233b776a8484dc9bcc2c264cee4b44f</stf:DocRefId>
+        </DocSpec>
+        <AccountNumber AcctNumberType="OECD602">7332823</AccountNumber>
+        <AccountHolder>
+          <SelfCert>CRS901</SelfCert>
+          <Organisation>
+            <ResCountryCode>BR</ResCountryCode>
+            <IN>7859988000198</IN>
+            <Name>BP ALIANCA INFORMATICA LTDA</Name>
+            <Address>
+              <cfc:CountryCode>BR</cfc:CountryCode>
+              <cfc:AddressFree>Rua Washington Luis 9, 9, Centro, Rio de Janeiro, RJ, BR</cfc:AddressFree>
+            </Address>
+          </Organisation>
+          <AcctHolderType>CRS101</AcctHolderType>
+        </AccountHolder>
+        <AccountBalance currCode="BRL">0.00</AccountBalance>
+        <DDProcedure>CRS1201</DDProcedure>
+        <AccountType>CRS1101</AccountType>
+      </AccountReport>
+      <AccountReport>
+        <DocSpec>
+          <stf:DocTypeIndic>OECD1</stf:DocTypeIndic>
+          <stf:DocRefId>KY2025BRFI107442-BR-33eda334ccdd42849e3555ed99cdb491</stf:DocRefId>
+        </DocSpec>
+        <AccountNumber AcctNumberType="OECD602">6115292</AccountNumber>
+        <AccountHolder>
+          <SelfCert>CRS901</SelfCert>
+          <Organisation>
+            <ResCountryCode>BR</ResCountryCode>
+            <IN>38218085000151</IN>
+            <Name>David Lucas Da Rosa</Name>
+            <Address>
+              <cfc:CountryCode>BR</cfc:CountryCode>
+              <cfc:AddressFree>RUA JAMANARI, 15, VILA ANDRADE, sao paulo, SP, BR</cfc:AddressFree>
+            </Address>
+          </Organisation>
+          <AcctHolderType>CRS101</AcctHolderType>
+        </AccountHolder>
+        <AccountBalance currCode="BRL">0.00</AccountBalance>
+        <DDProcedure>CRS1201</DDProcedure>
+        <AccountType>CRS1101</AccountType>
+      </AccountReport>
+      <AccountReport>
+        <DocSpec>
+          <stf:DocTypeIndic>OECD1</stf:DocTypeIndic>
+          <stf:DocRefId>KY2025BRFI107442-BR-22bf408c693740ccbee0e6a1200b4e4f</stf:DocRefId>
+        </DocSpec>
+        <AccountNumber AcctNumberType="OECD602">11080779</AccountNumber>
+        <AccountHolder>
+          <SelfCert>CRS901</SelfCert>
+          <Organisation>
+            <ResCountryCode>BR</ResCountryCode>
+            <IN>38254083000118</IN>
+            <Name>REDBOX TECHNOLOGY LTDA</Name>
+            <Address>
+              <cfc:CountryCode>BR</cfc:CountryCode>
+              <cfc:AddressFree>Rua Luiz Figueiredo Filho, 1910, Vila Nossa Senhor, SÃO JOSÉ DO RIO PRETO, SP, BR</cfc:AddressFree>
+            </Address>
+          </Organisation>
+          <AcctHolderType>CRS101</AcctHolderType>
+        </AccountHolder>
+        <AccountBalance currCode="BRL">0.00</AccountBalance>
+        <DDProcedure>CRS1201</DDProcedure>
+        <AccountType>CRS1101</AccountType>
+      </AccountReport>
+      <AccountReport>
+        <DocSpec>
+          <stf:DocTypeIndic>OECD1</stf:DocTypeIndic>
+          <stf:DocRefId>KY2025BRFI107442-BR-66ff2f064c6c4ee58ac7fd584d8c5bf9</stf:DocRefId>
+        </DocSpec>
+        <AccountNumber AcctNumberType="OECD602">5427185</AccountNumber>
+        <AccountHolder>
+          <SelfCert>CRS901</SelfCert>
+          <Organisation>
+            <ResCountryCode>BR</ResCountryCode>
+            <IN>37593565000130</IN>
+            <Name>CLINICA DUETO PSICANALISE EIRELI</Name>
+            <Address>
+              <cfc:CountryCode>BR</cfc:CountryCode>
+              <cfc:AddressFree>Rua Jose Jannarelli, 199, Vila Progredior, São Paulo, SP, BR</cfc:AddressFree>
+            </Address>
+          </Organisation>
+          <AcctHolderType>CRS101</AcctHolderType>
+        </AccountHolder>
+        <AccountBalance currCode="BRL">0.00</AccountBalance>
+        <DDProcedure>CRS1201</DDProcedure>
+        <AccountType>CRS1101</AccountType>
+      </AccountReport>
+      <AccountReport>
+        <DocSpec>
+          <stf:DocTypeIndic>OECD1</stf:DocTypeIndic>
+          <stf:DocRefId>KY2025BRFI107442-BR-6facab551cc743a1b44b9979480a1e20</stf:DocRefId>
+        </DocSpec>
+        <AccountNumber AcctNumberType="OECD602">8451885</AccountNumber>
+        <AccountHolder>
+          <SelfCert>CRS901</SelfCert>
+          <Organisation>
+            <ResCountryCode>BR</ResCountryCode>
+            <IN>29958644000179</IN>
+            <Name>MERLING PROJETOS DE MOLDES LTDA</Name>
+            <Address>
+              <cfc:CountryCode>BR</cfc:CountryCode>
+              <cfc:AddressFree>Rua Prefeito Helmuth Fallgatter, 2432, Boa Vista, Joinville, SC, BR</cfc:AddressFree>
+            </Address>
+          </Organisation>
+          <AcctHolderType>CRS101</AcctHolderType>
+        </AccountHolder>
+        <AccountBalance currCode="BRL">0.00</AccountBalance>
+        <DDProcedure>CRS1201</DDProcedure>
+        <AccountType>CRS1101</AccountType>
+      </AccountReport>
+      <AccountReport>
+        <DocSpec>
+          <stf:DocTypeIndic>OECD1</stf:DocTypeIndic>
+          <stf:DocRefId>KY2025BRFI107442-BR-a9a36976edf54e65bc2f8533a7b76ba1</stf:DocRefId>
+        </DocSpec>
+        <AccountNumber AcctNumberType="OECD602">11896035</AccountNumber>
+        <AccountHolder>
+          <SelfCert>CRS901</SelfCert>
+          <Individual>
+            <ResCountryCode>BR</ResCountryCode>
+            <TIN>2264176032</TIN>
+            <Name>
+              <FirstName>CAMILA</FirstName>
+              <LastName>PAIXAO DE MEIRA</LastName>
+            </Name>
+            <Address>
+              <cfc:CountryCode>BR</cfc:CountryCode>
+              <cfc:AddressFree>Rua Doutor Barbosa Gonçalves, 777, 1006, Chácara d, Porto Alegre, RS, BR</cfc:AddressFree>
+            </Address>
+          </Individual>
+        </AccountHolder>
+        <AccountBalance currCode="BRL">0.00</AccountBalance>
+        <DDProcedure>CRS1201</DDProcedure>
+        <AccountType>CRS1101</AccountType>
+      </AccountReport>
+      <AccountReport>
+        <DocSpec>
+          <stf:DocTypeIndic>OECD1</stf:DocTypeIndic>
+          <stf:DocRefId>KY2025BRFI107442-BR-0983c72a684b45fb8361871472a5358e</stf:DocRefId>
+        </DocSpec>
+        <AccountNumber AcctNumberType="OECD602">11889811</AccountNumber>
+        <AccountHolder>
+          <SelfCert>CRS901</SelfCert>
+          <Organisation>
+            <ResCountryCode>BR</ResCountryCode>
+            <IN>62827331000157</IN>
+            <Name>BRUNO CESAR JAIME SOCIEDADE INDIVIDUAL DE ADVOCACIA</Name>
+            <Address>
+              <cfc:CountryCode>BR</cfc:CountryCode>
+              <cfc:AddressFree>Rua 104, 135, Setor Sul, Goiânia, GO, BR</cfc:AddressFree>
+            </Address>
+          </Organisation>
+          <AcctHolderType>CRS101</AcctHolderType>
+        </AccountHolder>
+        <AccountBalance currCode="BRL">0.00</AccountBalance>
+        <DDProcedure>CRS1201</DDProcedure>
+        <AccountType>CRS1101</AccountType>
+      </AccountReport>
+      <AccountReport>
+        <DocSpec>
+          <stf:DocTypeIndic>OECD1</stf:DocTypeIndic>
+          <stf:DocRefId>KY2025BRFI107442-BR-0f4528dbf2464453a2a44e50dca82435</stf:DocRefId>
+        </DocSpec>
+        <AccountNumber AcctNumberType="OECD602">9447695</AccountNumber>
+        <AccountHolder>
+          <SelfCert>CRS901</SelfCert>
+          <Organisation>
+            <ResCountryCode>BR</ResCountryCode>
+            <IN>26102817000164</IN>
+            <Name>JESSICA SAURINI ANDRADE PRODUCOES E EVENTOS</Name>
+            <Address>
+              <cfc:CountryCode>BR</cfc:CountryCode>
+              <cfc:AddressFree>RUA DOUTOR NETO DE ARAÚJO, 163, Vila Mariana, SÃO PAULO, SP, BR</cfc:AddressFree>
+            </Address>
+          </Organisation>
+          <AcctHolderType>CRS101</AcctHolderType>
+        </AccountHolder>
+        <AccountBalance currCode="BRL">0.00</AccountBalance>
+        <DDProcedure>CRS1201</DDProcedure>
+        <AccountType>CRS1101</AccountType>
+      </AccountReport>
+      <AccountReport>
+        <DocSpec>
+          <stf:DocTypeIndic>OECD1</stf:DocTypeIndic>
+          <stf:DocRefId>KY2025BRFI107442-BR-fafefc2c07304e11aaa32fb00fecda3c</stf:DocRefId>
+        </DocSpec>
+        <AccountNumber AcctNumberType="OECD602">10071539</AccountNumber>
+        <AccountHolder>
+          <SelfCert>CRS901</SelfCert>
+          <Individual>
+            <ResCountryCode>BR</ResCountryCode>
+            <TIN>7415707850</TIN>
+            <Name>
+              <FirstName>PAULO</FirstName>
+              <LastName>MARCIO DE OLIVEIRA NEVES</LastName>
+            </Name>
+            <Address>
+              <cfc:CountryCode>BR</cfc:CountryCode>
+              <cfc:AddressFree>Luiz Oliveira, 327, apto 231, Parque das Flores, Campinas, SP, BR</cfc:AddressFree>
+            </Address>
+          </Individual>
+        </AccountHolder>
+        <AccountBalance currCode="BRL">257.61</AccountBalance>
+        <DDProcedure>CRS1201</DDProcedure>
+        <AccountType>CRS1101</AccountType>
+      </AccountReport>
+      <AccountReport>
+        <DocSpec>
+          <stf:DocTypeIndic>OECD1</stf:DocTypeIndic>
+          <stf:DocRefId>KY2025BRFI107442-BR-50daa016c5644377a2510fc1f9ff2047</stf:DocRefId>
+        </DocSpec>
+        <AccountNumber AcctNumberType="OECD602">2639467</AccountNumber>
+        <AccountHolder>
+          <SelfCert>CRS901</SelfCert>
+          <Individual>
+            <ResCountryCode>BR</ResCountryCode>
+            <TIN>10460798758</TIN>
+            <Name>
+              <FirstName>JOAO</FirstName>
+              <LastName>ERICK DE MATTOS FERNANDES</LastName>
+            </Name>
+            <Address>
+              <cfc:CountryCode>BR</cfc:CountryCode>
+              <cfc:AddressFree>Avenida Jornalista Alberto Francisco Torres, 55, 8, Niterói, RJ, BR</cfc:AddressFree>
+            </Address>
+          </Individual>
+        </AccountHolder>
+        <AccountBalance currCode="BRL">0.00</AccountBalance>
+        <DDProcedure>CRS1201</DDProcedure>
+        <AccountType>CRS1101</AccountType>
+      </AccountReport>
+      <AccountReport>
+        <DocSpec>
+          <stf:DocTypeIndic>OECD1</stf:DocTypeIndic>
+          <stf:DocRefId>KY2025BRFI107442-BR-d6871c8132ac4113aad7e2d9aac28926</stf:DocRefId>
+        </DocSpec>
+        <AccountNumber AcctNumberType="OECD602">10456694</AccountNumber>
+        <AccountHolder>
+          <SelfCert>CRS901</SelfCert>
+          <Organisation>
+            <ResCountryCode>BR</ResCountryCode>
+            <IN>35302018000122</IN>
+            <Name>L E TEDESQUE TECNOLOGIA</Name>
+            <Address>
+              <cfc:CountryCode>BR</cfc:CountryCode>
+              <cfc:AddressFree>Av Dom Pedro II, 1426, Centro, PORTO REAL, RJ, BR</cfc:AddressFree>
+            </Address>
+          </Organisation>
+          <AcctHolderType>CRS101</AcctHolderType>
+        </AccountHolder>
+        <AccountBalance currCode="BRL">0.00</AccountBalance>
+        <DDProcedure>CRS1201</DDProcedure>
+        <AccountType>CRS1101</AccountType>
+      </AccountReport>
+      <AccountReport>
+        <DocSpec>
+          <stf:DocTypeIndic>OECD1</stf:DocTypeIndic>
+          <stf:DocRefId>KY2025BRFI107442-BR-b4928c702c814f01ad16b94f43973252</stf:DocRefId>
+        </DocSpec>
+        <AccountNumber AcctNumberType="OECD602">11751738</AccountNumber>
+        <AccountHolder>
+          <SelfCert>CRS901</SelfCert>
+          <Individual>
+            <ResCountryCode>BR</ResCountryCode>
+            <TIN>252851064</TIN>
+            <Name>
+              <FirstName>CAROLINA</FirstName>
+              <LastName>MARTINS BASSO</LastName>
+            </Name>
+            <Address>
+              <cfc:CountryCode>BR</cfc:CountryCode>
+              <cfc:AddressFree>Rua Dona Eugênia, 1227, 803, Santa Cecília, Porto Alegre, RS, BR</cfc:AddressFree>
+            </Address>
+          </Individual>
+        </AccountHolder>
+        <AccountBalance currCode="BRL">0.66</AccountBalance>
+        <DDProcedure>CRS1201</DDProcedure>
+        <AccountType>CRS1101</AccountType>
+      </AccountReport>
+      <AccountReport>
+        <DocSpec>
+          <stf:DocTypeIndic>OECD1</stf:DocTypeIndic>
+          <stf:DocRefId>KY2025BRFI107442-BR-d1c7f84c9d624bbfaa7670421dc5bf5e</stf:DocRefId>
+        </DocSpec>
+        <AccountNumber AcctNumberType="OECD602">9333487</AccountNumber>
+        <AccountHolder>
+          <SelfCert>CRS901</SelfCert>
+          <Individual>
+            <ResCountryCode>BR</ResCountryCode>
+            <TIN>22258279828</TIN>
+            <Name>
+              <FirstName>AKEMI</FirstName>
+              <LastName>CAMILA DE OLIVEIRA</LastName>
+            </Name>
+            <Address>
+              <cfc:CountryCode>BR</cfc:CountryCode>
+              <cfc:AddressFree>Rua Engenheiro Francisco Bicalho, 195, Parque São, São Paulo, SP, BR</cfc:AddressFree>
+            </Address>
+          </Individual>
+        </AccountHolder>
+        <AccountBalance currCode="BRL">4243.71</AccountBalance>
+        <DDProcedure>CRS1201</DDProcedure>
+        <AccountType>CRS1101</AccountType>
+      </AccountReport>
+      <AccountReport>
+        <DocSpec>
+          <stf:DocTypeIndic>OECD1</stf:DocTypeIndic>
+          <stf:DocRefId>KY2025BRFI107442-BR-8a239ea0bcdb40caa3028972c8fab72e</stf:DocRefId>
+        </DocSpec>
+        <AccountNumber AcctNumberType="OECD602">9918418</AccountNumber>
+        <AccountHolder>
+          <SelfCert>CRS901</SelfCert>
+          <Organisation>
+            <ResCountryCode>BR</ResCountryCode>
+            <IN>42881947000107</IN>
+            <Name>CABOCLO VENTANIA DE ARUANDA ARTIGOS DE FE COMERCIO DE ARTIGO</Name>
+            <Address>
+              <cfc:CountryCode>BR</cfc:CountryCode>
+              <cfc:AddressFree>Rua Costa Barros, 425, Vila Alpina, SÃO PAULO, SP, BR</cfc:AddressFree>
+            </Address>
+          </Organisation>
+          <AcctHolderType>CRS101</AcctHolderType>
+        </AccountHolder>
+        <AccountBalance currCode="BRL">2680.85</AccountBalance>
+        <DDProcedure>CRS1201</DDProcedure>
+        <AccountType>CRS1101</AccountType>
+      </AccountReport>
+      <AccountReport>
+        <DocSpec>
+          <stf:DocTypeIndic>OECD1</stf:DocTypeIndic>
+          <stf:DocRefId>KY2025BRFI107442-BR-8b83ba00e4344e01985145d74f2d5df6</stf:DocRefId>
+        </DocSpec>
+        <AccountNumber AcctNumberType="OECD602">11080710</AccountNumber>
+        <AccountHolder>
+          <SelfCert>CRS901</SelfCert>
+          <Organisation>
+            <ResCountryCode>BR</ResCountryCode>
+            <IN>48495530000184</IN>
+            <Name>BF DESENVOLVIMENTO E CONSULTORIA DE TI LTDA</Name>
+            <Address>
+              <cfc:CountryCode>BR</cfc:CountryCode>
+              <cfc:AddressFree>Rua Conselheiro Paula Sousa, 1190, Cidade Universi, CAMPINAS, SP, BR</cfc:AddressFree>
+            </Address>
+          </Organisation>
+          <AcctHolderType>CRS101</AcctHolderType>
+        </AccountHolder>
+        <AccountBalance currCode="BRL">3363.00</AccountBalance>
+        <DDProcedure>CRS1201</DDProcedure>
+        <AccountType>CRS1101</AccountType>
+      </AccountReport>
+      <AccountReport>
+        <DocSpec>
+          <stf:DocTypeIndic>OECD1</stf:DocTypeIndic>
+          <stf:DocRefId>KY2025BRFI107442-BR-091b7624ba8a4be58e2926efbeb8c970</stf:DocRefId>
+        </DocSpec>
+        <AccountNumber AcctNumberType="OECD602">9020616</AccountNumber>
+        <AccountHolder>
+          <SelfCert>CRS901</SelfCert>
+          <Organisation>
+            <ResCountryCode>BR</ResCountryCode>
+            <IN>31979529000122</IN>
+            <Name>SOS INFORMATICA LTDA</Name>
+            <Address>
+              <cfc:CountryCode>BR</cfc:CountryCode>
+              <cfc:AddressFree>Avenida Ministro Ivan Lins, 460, Barra da Tijuca, Rio de Janeiro, RJ, BR</cfc:AddressFree>
+            </Address>
+          </Organisation>
+          <AcctHolderType>CRS101</AcctHolderType>
+        </AccountHolder>
+        <AccountBalance currCode="BRL">0.00</AccountBalance>
+        <DDProcedure>CRS1201</DDProcedure>
+        <AccountType>CRS1101</AccountType>
+      </AccountReport>
+      <AccountReport>
+        <DocSpec>
+          <stf:DocTypeIndic>OECD1</stf:DocTypeIndic>
+          <stf:DocRefId>KY2025BRFI107442-BR-2f7f49cdfb4046159349a72a56470b29</stf:DocRefId>
+        </DocSpec>
+        <AccountNumber AcctNumberType="OECD602">5911389</AccountNumber>
+        <AccountHolder>
+          <SelfCert>CRS901</SelfCert>
+          <Organisation>
+            <ResCountryCode>BR</ResCountryCode>
+            <IN>35091873000131</IN>
+            <Name>Adriano Sousa Da Silva Mei</Name>
+            <Address>
+              <cfc:CountryCode>BR</cfc:CountryCode>
+              <cfc:AddressFree>Rua Sao Carlos, 235, Parque Paulista, Franco da Rocha, SP, BR</cfc:AddressFree>
+            </Address>
+          </Organisation>
+          <AcctHolderType>CRS101</AcctHolderType>
+        </AccountHolder>
+        <AccountBalance currCode="BRL">0.00</AccountBalance>
+        <DDProcedure>CRS1201</DDProcedure>
+        <AccountType>CRS1101</AccountType>
+      </AccountReport>
+      <AccountReport>
+        <DocSpec>
+          <stf:DocTypeIndic>OECD1</stf:DocTypeIndic>
+          <stf:DocRefId>KY2025BRFI107442-BR-40e2abe5ba1346d9a49b12e0864547f4</stf:DocRefId>
+        </DocSpec>
+        <AccountNumber AcctNumberType="OECD602">4759621</AccountNumber>
+        <AccountHolder>
+          <SelfCert>CRS901</SelfCert>
+          <Organisation>
+            <ResCountryCode>BR</ResCountryCode>
+            <IN>37147763000170</IN>
+            <Name>BLUBRAIN TECHNOLOGY PESQUISA E DESENVOLVIMENTO EM CIENCIAS S</Name>
+            <Address>
+              <cfc:CountryCode>BR</cfc:CountryCode>
+              <cfc:AddressFree>Avenida Getulio Vargas, 1492, Savassi, BELO HORIZONTE, MG, BR</cfc:AddressFree>
+            </Address>
+          </Organisation>
+          <AcctHolderType>CRS101</AcctHolderType>
+        </AccountHolder>
+        <AccountBalance currCode="BRL">0.00</AccountBalance>
+        <DDProcedure>CRS1201</DDProcedure>
+        <AccountType>CRS1101</AccountType>
+      </AccountReport>
+      <AccountReport>
+        <DocSpec>
+          <stf:DocTypeIndic>OECD1</stf:DocTypeIndic>
+          <stf:DocRefId>KY2025BRFI107442-BR-d4e5dbfb41e04c0fbea5d4e9d18ad651</stf:DocRefId>
+        </DocSpec>
+        <AccountNumber AcctNumberType="OECD602">11729554</AccountNumber>
+        <AccountHolder>
+          <SelfCert>CRS901</SelfCert>
+          <Individual>
+            <ResCountryCode>BR</ResCountryCode>
+            <TIN>7204543360</TIN>
+            <Name>
+              <FirstName>Johnata</FirstName>
+              <LastName>Ferreira Leite De Oliveira</LastName>
+            </Name>
+            <Address>
+              <cfc:CountryCode>BR</cfc:CountryCode>
+              <cfc:AddressFree>Rua do Catolé, 151, Duplex, Jardim das Oliveiras, Fortaleza, CE, BR</cfc:AddressFree>
+            </Address>
+          </Individual>
+        </AccountHolder>
+        <AccountBalance currCode="BRL">11.27</AccountBalance>
+        <DDProcedure>CRS1201</DDProcedure>
+        <AccountType>CRS1101</AccountType>
+      </AccountReport>
+      <AccountReport>
+        <DocSpec>
+          <stf:DocTypeIndic>OECD1</stf:DocTypeIndic>
+          <stf:DocRefId>KY2025BRFI107442-BR-38ca13d3055742ff8e9473c62cf42e3a</stf:DocRefId>
+        </DocSpec>
+        <AccountNumber AcctNumberType="OECD602">10710388</AccountNumber>
+        <AccountHolder>
+          <SelfCert>CRS901</SelfCert>
+          <Organisation>
+            <ResCountryCode>BR</ResCountryCode>
+            <IN>41250748000120</IN>
+            <Name>K P F GAMAS CONSULTORIA</Name>
+            <Address>
+              <cfc:CountryCode>BR</cfc:CountryCode>
+              <cfc:AddressFree>Avenida Engenheiro Luiz Carlos Berrini, 1748, Cida, SÃO PAULO, SP, BR</cfc:AddressFree>
+            </Address>
+          </Organisation>
+          <AcctHolderType>CRS101</AcctHolderType>
+        </AccountHolder>
+        <AccountBalance currCode="BRL">0.00</AccountBalance>
+        <DDProcedure>CRS1201</DDProcedure>
+        <AccountType>CRS1101</AccountType>
+      </AccountReport>
+      <AccountReport>
+        <DocSpec>
+          <stf:DocTypeIndic>OECD1</stf:DocTypeIndic>
+          <stf:DocRefId>KY2025BRFI107442-BR-0b5dd78494ae4ad09f539b0f7bdefe98</stf:DocRefId>
+        </DocSpec>
+        <AccountNumber AcctNumberType="OECD602">11069295</AccountNumber>
+        <AccountHolder>
+          <SelfCert>CRS901</SelfCert>
+          <Individual>
+            <ResCountryCode>BR</ResCountryCode>
+            <TIN>8564262886</TIN>
+            <Name>
+              <FirstName>Marilene</FirstName>
+              <LastName>Letange</LastName>
+            </Name>
+            <Address>
+              <cfc:CountryCode>BR</cfc:CountryCode>
+              <cfc:AddressFree>Rua Trajano Reis, 185, Ap101 B1, Jardim das Verten, São Paulo, SP, BR</cfc:AddressFree>
+            </Address>
+          </Individual>
+        </AccountHolder>
+        <AccountBalance currCode="BRL">0.06</AccountBalance>
+        <DDProcedure>CRS1201</DDProcedure>
+        <AccountType>CRS1101</AccountType>
+      </AccountReport>
+      <AccountReport>
+        <DocSpec>
+          <stf:DocTypeIndic>OECD1</stf:DocTypeIndic>
+          <stf:DocRefId>KY2025BRFI107442-BR-c49dd89af3464807b01a7aec2c203956</stf:DocRefId>
+        </DocSpec>
+        <AccountNumber AcctNumberType="OECD602">8789037</AccountNumber>
+        <AccountHolder>
+          <SelfCert>CRS901</SelfCert>
+          <Organisation>
+            <ResCountryCode>BR</ResCountryCode>
+            <IN>34875041000143</IN>
+            <Name>DESPACHADOS EMPREENDIMENTOS IMOBILIARIOS LTDA</Name>
+            <Address>
+              <cfc:CountryCode>BR</cfc:CountryCode>
+              <cfc:AddressFree>Rua Barao de Petropolis, 214, Rio Comprido, RIO DE JANEIRO, RJ, BR</cfc:AddressFree>
+            </Address>
+          </Organisation>
+          <AcctHolderType>CRS101</AcctHolderType>
+        </AccountHolder>
+        <AccountBalance currCode="BRL">0.00</AccountBalance>
+        <DDProcedure>CRS1201</DDProcedure>
+        <AccountType>CRS1101</AccountType>
+      </AccountReport>
+      <AccountReport>
+        <DocSpec>
+          <stf:DocTypeIndic>OECD1</stf:DocTypeIndic>
+          <stf:DocRefId>KY2025BRFI107442-BR-118ad6c1f1f3484c8617cf320cb2e332</stf:DocRefId>
+        </DocSpec>
+        <AccountNumber AcctNumberType="OECD602">10098879</AccountNumber>
+        <AccountHolder>
+          <SelfCert>CRS901</SelfCert>
+          <Organisation>
+            <ResCountryCode>BR</ResCountryCode>
+            <IN>36782251000112</IN>
+            <Name>DANIEL POPP COELHO LTDA</Name>
+            <Address>
+              <cfc:CountryCode>BR</cfc:CountryCode>
+              <cfc:AddressFree>Avenida Pedra Branca, 1325, Pedra Branca, PALHOÇA, SC, BR</cfc:AddressFree>
+            </Address>
+          </Organisation>
+          <AcctHolderType>CRS101</AcctHolderType>
+        </AccountHolder>
+        <AccountBalance currCode="BRL">0.00</AccountBalance>
+        <DDProcedure>CRS1201</DDProcedure>
+        <AccountType>CRS1101</AccountType>
+      </AccountReport>
+      <AccountReport>
+        <DocSpec>
+          <stf:DocTypeIndic>OECD1</stf:DocTypeIndic>
+          <stf:DocRefId>KY2025BRFI107442-BR-c3ef81415fd6415f89a33e5264ed45f0</stf:DocRefId>
+        </DocSpec>
+        <AccountNumber AcctNumberType="OECD602">10185682</AccountNumber>
+        <AccountHolder>
+          <SelfCert>CRS901</SelfCert>
+          <Organisation>
+            <ResCountryCode>BR</ResCountryCode>
+            <IN>44438450000136</IN>
+            <Name>Tier 3 Aplicativos LTDA</Name>
+            <Address>
+              <cfc:CountryCode>BR</cfc:CountryCode>
+              <cfc:AddressFree>Fazenda Morada do Morro Grande, 50, Zona Rural, Carmo da Cachoeira, MG, BR</cfc:AddressFree>
+            </Address>
+          </Organisation>
+          <AcctHolderType>CRS101</AcctHolderType>
+        </AccountHolder>
+        <AccountBalance currCode="BRL">0.00</AccountBalance>
+        <DDProcedure>CRS1201</DDProcedure>
+        <AccountType>CRS1101</AccountType>
+      </AccountReport>
+      <AccountReport>
+        <DocSpec>
+          <stf:DocTypeIndic>OECD1</stf:DocTypeIndic>
+          <stf:DocRefId>KY2025BRFI107442-BR-42cf7896003644be8882e343ddd1a32a</stf:DocRefId>
+        </DocSpec>
+        <AccountNumber AcctNumberType="OECD602">11695081</AccountNumber>
+        <AccountHolder>
+          <SelfCert>CRS901</SelfCert>
+          <Individual>
+            <ResCountryCode>BR</ResCountryCode>
+            <TIN>588667013</TIN>
+            <Name>
+              <FirstName>SUELEN</FirstName>
+              <LastName>HERNANDES MORAES</LastName>
+            </Name>
+            <Address>
+              <cfc:CountryCode>BR</cfc:CountryCode>
+              <cfc:AddressFree>Rua Trinta e Oito, 151, Areal, Pelotas, RS, BR</cfc:AddressFree>
+            </Address>
+          </Individual>
+        </AccountHolder>
+        <AccountBalance currCode="BRL">0.00</AccountBalance>
+        <DDProcedure>CRS1201</DDProcedure>
+        <AccountType>CRS1101</AccountType>
+      </AccountReport>
+      <AccountReport>
+        <DocSpec>
+          <stf:DocTypeIndic>OECD1</stf:DocTypeIndic>
+          <stf:DocRefId>KY2025BRFI107442-BR-7ce8afa24b084e81b9a43d6667bf7399</stf:DocRefId>
+        </DocSpec>
+        <AccountNumber AcctNumberType="OECD602">6320074</AccountNumber>
+        <AccountHolder>
+          <SelfCert>CRS901</SelfCert>
+          <Organisation>
+            <ResCountryCode>BR</ResCountryCode>
+            <IN>36619279000133</IN>
+            <Name>N Unterstell Consultoria Em Meio Ambiente Ltda</Name>
+            <Address>
+              <cfc:CountryCode>BR</cfc:CountryCode>
+              <cfc:AddressFree>Rua Frei Solano, 18, Lagoa, Rio de Janeiro, RJ, BR</cfc:AddressFree>
+            </Address>
+          </Organisation>
+          <AcctHolderType>CRS101</AcctHolderType>
+        </AccountHolder>
+        <AccountBalance currCode="BRL">-264.78</AccountBalance>
+        <DDProcedure>CRS1201</DDProcedure>
+        <AccountType>CRS1101</AccountType>
+      </AccountReport>
+    </ReportingGroup>
+  </CrsBody>
+</CRS_OECD>

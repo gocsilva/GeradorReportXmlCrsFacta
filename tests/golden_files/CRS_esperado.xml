@@ -1,0 +1,53 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<CRS_OECD xmlns="urn:oecd:ties:crs:v3" xmlns:stf="urn:oecd:ties:crsstf:v5" xmlns:cfc="urn:oecd:ties:commontypesfatcacrs:v2" xmlns:iso="urn:oecd:ties:isocrstypes:v1" xmlns:ftc="urn:oecd:ties:fatca:v1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="urn:oecd:ties:crs:v3 CrsXML_v3.0.xsd" version="3.0">
+  <MessageSpec>
+    <TransmittingCountry>BR</TransmittingCountry>
+    <ReceivingCountry>US</ReceivingCountry>
+    <MessageType>CRS</MessageType>
+    <MessageRefId>AUTO-BR-13b5ca7c6aa84b43a1dbc108f543463d</MessageRefId>
+    <MessageTypeIndic>CRS701</MessageTypeIndic>
+    <ReportingPeriod>2025-12-31</ReportingPeriod>
+    <Timestamp>2026-07-28T16:49:05</Timestamp>
+  </MessageSpec>
+  <CrsBody>
+    <ReportingFI>
+      <ResCountryCode>BR</ResCountryCode>
+      <IN issuedBy="BR">123456</IN>
+      <Name>Banco Teste</Name>
+      <Address>
+        <cfc:CountryCode>BR</cfc:CountryCode>
+        <cfc:AddressFree>Rua A 1</cfc:AddressFree>
+      </Address>
+      <DocSpec>
+        <stf:DocTypeIndic>OECD1</stf:DocTypeIndic>
+        <stf:DocRefId>AUTO-BR-625c7b153bde450394839513d7340496</stf:DocRefId>
+      </DocSpec>
+    </ReportingFI>
+    <ReportingGroup>
+      <AccountReport>
+        <DocSpec>
+          <stf:DocTypeIndic>OECD1</stf:DocTypeIndic>
+          <stf:DocRefId>AUTO-BR-e7a48172ed3541f096aafc7a48b96b30</stf:DocRefId>
+        </DocSpec>
+        <AccountNumber AcctNumberType="OECD602">ACC1</AccountNumber>
+        <AccountHolder>
+          <SelfCert>CRS901</SelfCert>
+          <Individual>
+            <ResCountryCode>BR</ResCountryCode>
+            <Name>
+              <FirstName>Ana</FirstName>
+              <LastName>Silva</LastName>
+            </Name>
+            <Address>
+              <cfc:CountryCode>BR</cfc:CountryCode>
+              <cfc:AddressFree>Rua B 2</cfc:AddressFree>
+            </Address>
+          </Individual>
+        </AccountHolder>
+        <AccountBalance currCode="USD">1000.00</AccountBalance>
+        <DDProcedure>CRS1201</DDProcedure>
+        <AccountType>CRS1101</AccountType>
+      </AccountReport>
+    </ReportingGroup>
+  </CrsBody>
+</CRS_OECD>

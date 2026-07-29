@@ -1,0 +1,36 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<FATCA_OECD xmlns="urn:oecd:ties:fatca:v2" xmlns:sfa="urn:oecd:ties:stffatcatypes:v2" xmlns:stf="urn:oecd:ties:stf:v4" xmlns:iso="urn:oecd:ties:isofatcatypes:v1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="urn:oecd:ties:fatca:v2 FatcaXML_v2.0.1.xsd" version="2.0">
+  <MessageSpec>
+    <sfa:TransmittingCountry>BR</sfa:TransmittingCountry>
+    <sfa:ReceivingCountry>US</sfa:ReceivingCountry>
+    <sfa:MessageType>FATCA</sfa:MessageType>
+    <sfa:MessageRefId>AUTO-BR-4d45e606a6c24fc2b3b153c0d01b9e08</sfa:MessageRefId>
+    <sfa:ReportingPeriod>2025-12-31</sfa:ReportingPeriod>
+    <sfa:Timestamp>2026-07-28T16:49:58</sfa:Timestamp>
+  </MessageSpec>
+  <FATCA>
+    <ReportingFI>
+      <sfa:ResCountryCode>BR</sfa:ResCountryCode>
+      <sfa:TIN issuedBy="BR">123456</sfa:TIN>
+      <sfa:Name>Banco Teste</sfa:Name>
+      <sfa:Address>
+        <sfa:CountryCode>BR</sfa:CountryCode>
+        <sfa:AddressFree>Rua A 1</sfa:AddressFree>
+      </sfa:Address>
+      <FilerCategory>FATCA601</FilerCategory>
+      <DocSpec>
+        <DocTypeIndic>FATCA1</DocTypeIndic>
+        <DocRefId>AUTO-BR-c73bf859c4144925983abe8aa8d9e247</DocRefId>
+      </DocSpec>
+    </ReportingFI>
+    <ReportingGroup>
+      <NilReport>
+        <DocSpec>
+          <DocTypeIndic>OECD1</DocTypeIndic>
+          <DocRefId>AUTO-BR-206ecf6804214ad9a02cab6a12ec8baf</DocRefId>
+        </DocSpec>
+        <NoAccountToReport>yes</NoAccountToReport>
+      </NilReport>
+    </ReportingGroup>
+  </FATCA>
+</FATCA_OECD>

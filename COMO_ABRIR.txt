@@ -1,0 +1,24 @@
+Como abrir
+
+1. Copie a pasta inteira CRS_FATCA_XML_Generator_Portable para o pendrive.
+2. No outro computador, copie essa mesma pasta para Downloads, Documentos ou Area de Trabalho.
+3. Abra:
+
+Abrir_Gerador_CRS_FATCA.cmd
+
+Se preferir, tambem pode abrir:
+
+Abrir_Gerador_CRS_FATCA.vbs
+
+O pacote e portatil. Mantenha todos os arquivos e a pasta _internal juntos.
+O programa nao depende da pasta C:\Guilherme\CIIntegracao.
+Nao precisa de permissao de administrador.
+Ao selecionar uma planilha com o layout dos exemplos, o mapeamento e preenchido automaticamente.
+
+Fluxo simples:
+1. Clique em Selecionar Excel.
+2. Clique em Executar agora.
+
+Os XMLs serao salvos em XML_Gerados ao lado do Excel quando a pasta permitir gravacao.
+Se a pasta do Excel estiver bloqueada, o programa salva automaticamente em Documentos\CRS_FATCA_XML_Gerados.
+Nenhuma configuracao manual e necessaria.

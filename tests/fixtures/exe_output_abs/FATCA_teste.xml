@@ -1,0 +1,50 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<FATCA_OECD xmlns="urn:oecd:ties:fatca:v2" xmlns:sfa="urn:oecd:ties:stffatcatypes:v2" xmlns:stf="urn:oecd:ties:stf:v4" xmlns:iso="urn:oecd:ties:isofatcatypes:v1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="urn:oecd:ties:fatca:v2 FatcaXML_v2.0.1.xsd" version="2.0">
+  <MessageSpec>
+    <sfa:TransmittingCountry>BR</sfa:TransmittingCountry>
+    <sfa:ReceivingCountry>US</sfa:ReceivingCountry>
+    <sfa:MessageType>FATCA</sfa:MessageType>
+    <sfa:MessageRefId>AUTO-BR-026db36c6b7b4427af2d8e94a2f9c7b3</sfa:MessageRefId>
+    <sfa:ReportingPeriod>2025-12-31</sfa:ReportingPeriod>
+    <sfa:Timestamp>2026-07-28T16:53:21</sfa:Timestamp>
+  </MessageSpec>
+  <FATCA>
+    <ReportingFI>
+      <sfa:ResCountryCode>BR</sfa:ResCountryCode>
+      <sfa:TIN issuedBy="BR">123456</sfa:TIN>
+      <sfa:Name>Banco Teste</sfa:Name>
+      <sfa:Address>
+        <sfa:CountryCode>BR</sfa:CountryCode>
+        <sfa:AddressFree>Rua A 1</sfa:AddressFree>
+      </sfa:Address>
+      <FilerCategory>FATCA601</FilerCategory>
+      <DocSpec>
+        <DocTypeIndic>FATCA1</DocTypeIndic>
+        <DocRefId>AUTO-BR-fdaecc6c54af425990e6851170015a17</DocRefId>
+      </DocSpec>
+    </ReportingFI>
+    <ReportingGroup>
+      <AccountReport>
+        <DocSpec>
+          <DocTypeIndic>FATCA1</DocTypeIndic>
+          <DocRefId>AUTO-BR-7f11b074d83e442193f35511aa0f3882</DocRefId>
+        </DocSpec>
+        <AccountNumber AcctNumberType="OECD602">ACC1</AccountNumber>
+        <AccountHolder>
+          <Individual>
+            <sfa:ResCountryCode>BR</sfa:ResCountryCode>
+            <sfa:Name>
+              <sfa:FirstName>Ana</sfa:FirstName>
+              <sfa:LastName>Silva</sfa:LastName>
+            </sfa:Name>
+            <sfa:Address>
+              <sfa:CountryCode>BR</sfa:CountryCode>
+              <sfa:AddressFree>Rua B 2</sfa:AddressFree>
+            </sfa:Address>
+          </Individual>
+        </AccountHolder>
+        <AccountBalance currCode="USD">1000.00</AccountBalance>
+      </AccountReport>
+    </ReportingGroup>
+  </FATCA>
+</FATCA_OECD>
