@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
+from typing import Any, Callable
 
 from crs_fatca_generator.models.domain import GenerationResult, ValidationIssue
 from crs_fatca_generator.models.mapping import MappingProfile
@@ -32,11 +33,14 @@ class GenerationService:
         profile: MappingProfile,
         excel_path: Path | None = None,
         overwrite: bool = False,
+        progress_callback: Callable[[dict[str, Any]], None] | None = None,
     ) -> list[GenerationResult]:
         results: list[GenerationResult] = []
+        self._emit_progress(progress_callback, "Preparando dados", "", 0, len(rows), "")
         file_hash = sha256_file(excel_path) if excel_path and excel_path.exists() else ""
         data_service = DataPreparationService()
         prepared = data_service.prepare(rows, profile)
+        self._emit_progress(progress_callback, "Preparando dados", "", len(rows), len(rows), "")
         audit_csv, audit_xlsx, audit_json = self._audit_paths(profile, excel_path)
         audit_summary = self._audit_summary(prepared, audit_csv, audit_xlsx, audit_json)
         reports: dict[str, object] = {}
@@ -44,15 +48,28 @@ class GenerationService:
             for kind in kinds:
                 output_path = self._output_path(kind, profile)
                 results.append(GenerationResult(kind, str(output_path), False, prepared.issues, {**audit_summary, **self._fiscal_summary(kind, profile), "status": "nao gerado"}))
+            self._emit_progress(progress_callback, "Gerando auditoria", "", 0, 1, "")
             data_service.write_audit(prepared, self._audit_dir(profile), self._audit_stem(profile, excel_path), profile, excel_path, file_hash, results, reports)
+            self._emit_progress(progress_callback, "Gerando auditoria", "", 1, 1, "")
             return results
         for kind in kinds:
+            kind_name = kind.upper()
             schema_path = self.crs_schema if kind == "crs" else self.fatca_schema
+            self._emit_progress(progress_callback, "Carregando schema", kind_name, 0, 1, schema_path.name)
             enums = SchemaInspector().enums(schema_path)
             bundle = SchemaLoader().load(kind, "3.0" if kind == "crs" else "2.0.1", schema_path)
-            report = self.mapping_service.build_report(kind, prepared.rows, profile, file_hash)
+            self._emit_progress(progress_callback, "Carregando schema", kind_name, 1, 1, schema_path.name)
+
+            def mapping_progress(processed: int, total: int, row: dict[str, Any]) -> None:
+                self._emit_progress(progress_callback, "Montando dados", kind_name, processed, total, self._row_label(row))
+
+            self._emit_progress(progress_callback, "Montando dados", kind_name, 0, len(prepared.rows), "")
+            report = self.mapping_service.build_report(kind, prepared.rows, profile, file_hash, progress_callback=mapping_progress)
+            self._emit_progress(progress_callback, "Montando dados", kind_name, len(getattr(report, "accounts", [])), len(getattr(report, "accounts", [])), "")
             reports[kind] = report
+            self._emit_progress(progress_callback, "Validando regras", kind_name, 0, 1, "")
             business_issues = self.business_validator.validate(report, enums)
+            self._emit_progress(progress_callback, "Validando regras", kind_name, 1, 1, "")
             output_path = self._output_path(kind, profile)
             if output_path.exists() and not overwrite:
                 business_issues.append(
@@ -61,8 +78,20 @@ class GenerationService:
             if any(issue.level == "erro" for issue in business_issues):
                 results.append(GenerationResult(kind, str(output_path), False, business_issues, {**self._summary(report, "nao gerado"), **audit_summary, **self._fiscal_summary(kind, profile)}))
                 continue
-            tree = CrsGenerator().write(report, output_path, profile.output.pretty_print) if kind == "crs" else FatcaGenerator().write(report, output_path, profile.output.pretty_print)
+            accounts_total = max(len(getattr(report, "accounts", [])), 1)
+
+            def write_progress(processed: int, total: int, account: object) -> None:
+                self._emit_progress(progress_callback, "Escrevendo XML", kind_name, processed, total, self._account_label(account))
+
+            self._emit_progress(progress_callback, "Escrevendo XML", kind_name, 0, accounts_total, str(output_path.name))
+            if kind == "crs":
+                tree = CrsGenerator().write(report, output_path, profile.output.pretty_print, progress_callback=write_progress)
+            else:
+                tree = FatcaGenerator().write(report, output_path, profile.output.pretty_print, progress_callback=write_progress)
+            self._emit_progress(progress_callback, "Escrevendo XML", kind_name, accounts_total, accounts_total, str(output_path.name))
+            self._emit_progress(progress_callback, "Validando XSD", kind_name, 0, 1, schema_path.name)
             xsd_issues = self.xml_validator.validate_tree(tree, schema_path, kind)
+            self._emit_progress(progress_callback, "Validando XSD", kind_name, 1, 1, schema_path.name)
             valid = not xsd_issues
             results.append(
                 GenerationResult(
@@ -73,7 +102,9 @@ class GenerationService:
                     summary={**self._summary(report, "valido" if valid else "invalido"), **audit_summary, **self._fiscal_summary(kind, profile), "schema_hashes": ",".join(bundle.hashes.values())},
                 )
             )
+        self._emit_progress(progress_callback, "Gerando auditoria", "", 0, 1, "")
         data_service.write_audit(prepared, self._audit_dir(profile), self._audit_stem(profile, excel_path), profile, excel_path, file_hash, results, reports)
+        self._emit_progress(progress_callback, "Gerando auditoria", "", 1, 1, "")
         return results
 
     def _output_path(self, kind: str, profile: MappingProfile) -> Path:
@@ -150,3 +181,42 @@ class GenerationService:
                 "status_fiscal": "pendente_confirmacao_us_tax_id",
             }
         return {"arquivo_teste": "nao", "status_fiscal": "conforme_politica_configurada"}
+
+    def _emit_progress(
+        self,
+        progress_callback: Callable[[dict[str, Any]], None] | None,
+        phase: str,
+        kind: str,
+        processed: int,
+        total: int,
+        current_record: str,
+    ) -> None:
+        if progress_callback:
+            progress_callback(
+                {
+                    "phase": phase,
+                    "kind": kind,
+                    "processed": processed,
+                    "total": total,
+                    "current_record": current_record,
+                }
+            )
+
+    def _row_label(self, row: dict[str, Any]) -> str:
+        excel_row = row.get("_excel_row", "")
+        account = row.get("AccountNumber") or row.get("NumConta") or ""
+        document = row.get("Identification Number / CPF") or row.get("DocumentoCliente") or ""
+        if account:
+            return f"linha {excel_row} | conta {account}"
+        if document:
+            return f"linha {excel_row} | documento {document}"
+        return f"linha {excel_row}".strip()
+
+    def _account_label(self, account: object) -> str:
+        value = str(getattr(account, "account_number", "") or "")
+        doc_ref = getattr(getattr(account, "doc_spec", None), "doc_ref_id", "")
+        if value:
+            return f"conta {value}"
+        if doc_ref:
+            return f"doc {doc_ref}"
+        return ""

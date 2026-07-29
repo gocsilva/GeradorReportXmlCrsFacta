@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 from uuid import uuid4
 
 from crs_fatca_generator.infrastructure.database import IdentifierStore
@@ -78,7 +78,14 @@ class MappingService:
     def __init__(self, identifier_store: IdentifierStore | None = None) -> None:
         self.identifier_store = identifier_store or IdentifierStore()
 
-    def build_report(self, kind: str, rows: list[dict[str, Any]], profile: MappingProfile, file_hash: str = "") -> TaxReport:
+    def build_report(
+        self,
+        kind: str,
+        rows: list[dict[str, Any]],
+        profile: MappingProfile,
+        file_hash: str = "",
+        progress_callback: Callable[[int, int, dict[str, Any]], None] | None = None,
+    ) -> TaxReport:
         if not rows:
             rows = [{"_excel_row": 0}]
         first = rows[0]
@@ -91,7 +98,7 @@ class MappingService:
                 self._explicit_identifier_value("account.doc_ref_id", first, profile) or self._new_id("fatca-nil-doc", profile, file_hash),
             )
             return TaxReport(kind, message, reporting_fi, [], nil)
-        accounts = self._accounts(kind, rows, profile, file_hash)
+        accounts = self._accounts(kind, rows, profile, file_hash, progress_callback)
         return TaxReport(kind, message, reporting_fi, accounts)
 
     def value(self, field: str, row: dict[str, Any], profile: MappingProfile, default: str = "") -> str:
@@ -168,15 +175,25 @@ class MappingService:
         self.identifier_store.add(f"{kind}-fi-doc", doc_ref, file_hash)
         return ReportingFI(party, DocSpec(doc_type, doc_ref), self.value("reporting_fi.filer_category", row, profile, "FATCA601"))
 
-    def _accounts(self, kind: str, rows: list[dict[str, Any]], profile: MappingProfile, file_hash: str) -> list[AccountReport]:
+    def _accounts(
+        self,
+        kind: str,
+        rows: list[dict[str, Any]],
+        profile: MappingProfile,
+        file_hash: str,
+        progress_callback: Callable[[int, int, dict[str, Any]], None] | None = None,
+    ) -> list[AccountReport]:
         groups: dict[str, list[dict[str, Any]]] = {}
         key_col = profile.grouping.account_key
         for row in rows:
             key = str(row.get(key_col, "") or self.value("account.account_number", row, profile) or row.get("_excel_row"))
             groups.setdefault(key, []).append(row)
         accounts: list[AccountReport] = []
-        for group_rows in groups.values():
+        total = len(groups)
+        for index, group_rows in enumerate(groups.values(), 1):
             row = group_rows[0]
+            if progress_callback and (index == 1 or index % 50 == 0 or index == total):
+                progress_callback(index, total, row)
             doc_type = self._doc_type(kind, self.value("account.doc_type_indic", row, profile, "FATCA1" if kind == "fatca" else "OECD1"))
             doc_ref = self._explicit_identifier_value("account.doc_ref_id", row, profile) or self._new_id(f"{kind}-account-doc", profile, file_hash)
             self.identifier_store.add(f"{kind}-account-doc", doc_ref, file_hash)

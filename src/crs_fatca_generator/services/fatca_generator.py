@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Callable
 
 from lxml import etree
 
@@ -9,7 +10,12 @@ from .xml_helpers import FATCA_ISO_NS, FATCA_NS, FATCA_SFA_NS, FATCA_STF_NS, XSI
 
 
 class FatcaGenerator:
-    def build_tree(self, report: TaxReport, schema_location: str = "FatcaXML_v2.0.1.xsd") -> etree._ElementTree:
+    def build_tree(
+        self,
+        report: TaxReport,
+        schema_location: str = "FatcaXML_v2.0.1.xsd",
+        progress_callback: Callable[[int, int, AccountReport], None] | None = None,
+    ) -> etree._ElementTree:
         root = etree.Element(
             q(FATCA_NS, "FATCA_OECD"),
             nsmap={None: FATCA_NS, "sfa": FATCA_SFA_NS, "stf": FATCA_STF_NS, "iso": FATCA_ISO_NS, "xsi": XSI_NS},
@@ -24,12 +30,21 @@ class FatcaGenerator:
             self._doc_spec(nil, report.nil_report)
             add(nil, FATCA_NS, "NoAccountToReport", "yes")
         else:
-            for account in report.accounts:
+            total = len(report.accounts)
+            for index, account in enumerate(report.accounts, 1):
+                if progress_callback and (index == 1 or index % 50 == 0 or index == total):
+                    progress_callback(index, total, account)
                 self._account(group, account)
         return etree.ElementTree(root)
 
-    def write(self, report: TaxReport, output_path: Path, pretty_print: bool = True) -> etree._ElementTree:
-        tree = self.build_tree(report)
+    def write(
+        self,
+        report: TaxReport,
+        output_path: Path,
+        pretty_print: bool = True,
+        progress_callback: Callable[[int, int, AccountReport], None] | None = None,
+    ) -> etree._ElementTree:
+        tree = self.build_tree(report, progress_callback=progress_callback)
         atomic_write(tree, output_path, pretty_print)
         return tree
 

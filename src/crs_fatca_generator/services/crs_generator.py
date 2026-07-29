@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+from typing import Callable
 
 from lxml import etree
 
@@ -13,7 +14,12 @@ logger = logging.getLogger(__name__)
 
 
 class CrsGenerator:
-    def build_tree(self, report: TaxReport, schema_location: str = "CrsXML_v3.0.xsd") -> etree._ElementTree:
+    def build_tree(
+        self,
+        report: TaxReport,
+        schema_location: str = "CrsXML_v3.0.xsd",
+        progress_callback: Callable[[int, int, AccountReport], None] | None = None,
+    ) -> etree._ElementTree:
         root = etree.Element(
             q(CRS_NS, "CRS_OECD"),
             nsmap={None: CRS_NS, "stf": CRS_STF_NS, "cfc": CRS_CFC_NS, "iso": CRS_ISO_NS, "ftc": CRS_FTCA_V1_NS, "xsi": XSI_NS},
@@ -23,12 +29,21 @@ class CrsGenerator:
         body = add(root, CRS_NS, "CrsBody")
         self._reporting_fi(body, report)
         group = add(body, CRS_NS, "ReportingGroup")
-        for account in report.accounts:
+        total = len(report.accounts)
+        for index, account in enumerate(report.accounts, 1):
+            if progress_callback and (index == 1 or index % 50 == 0 or index == total):
+                progress_callback(index, total, account)
             self._account(group, account)
         return etree.ElementTree(root)
 
-    def write(self, report: TaxReport, output_path: Path, pretty_print: bool = True) -> etree._ElementTree:
-        tree = self.build_tree(report)
+    def write(
+        self,
+        report: TaxReport,
+        output_path: Path,
+        pretty_print: bool = True,
+        progress_callback: Callable[[int, int, AccountReport], None] | None = None,
+    ) -> etree._ElementTree:
+        tree = self.build_tree(report, progress_callback=progress_callback)
         atomic_write(tree, output_path, pretty_print)
         return tree
 

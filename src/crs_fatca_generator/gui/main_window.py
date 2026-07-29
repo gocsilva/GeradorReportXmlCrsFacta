@@ -8,7 +8,7 @@ from pathlib import Path
 from time import monotonic
 from typing import Any
 
-from PySide6.QtCore import QObject, QSignalBlocker, QThread, Signal
+from PySide6.QtCore import QObject, QSignalBlocker, QThread, QTimer, Signal
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QApplication,
@@ -57,7 +57,7 @@ def neutral_start_dir() -> str:
 class GenerateWorker(QObject):
     finished = Signal(list)
     failed = Signal(str)
-    progress = Signal(str, int, int, str, str)
+    progress = Signal(str, str, int, int, str, str)
 
     def __init__(
         self,
@@ -88,6 +88,7 @@ class GenerateWorker(QObject):
                     seconds_left = int((elapsed / max(processed, 1)) * remaining)
                     self.progress.emit(
                         "Lendo Excel",
+                        "",
                         processed,
                         total,
                         self._record_label(row, excel_row),
@@ -111,7 +112,7 @@ class GenerateWorker(QObject):
                 )
             if not rows:
                 rows = [{"_excel_row": 0}]
-            self.progress.emit("Gerando XML", len(rows), len(rows), "Leitura concluida", "instantes")
+            self.progress.emit("Iniciando geracao", "", 0, max(len(rows), 1), "Leitura concluida", "calculando")
             logger.info(
                 "TRACE_BUTTON_PIPELINE GenerateWorker.run -> GenerationService.generate kinds=%s rows=%s identifier_prefix=%s use_uuid=%s",
                 self.kinds,
@@ -120,7 +121,34 @@ class GenerateWorker(QObject):
                 self.profile.identifier_config.use_uuid,
             )
             service = GenerationService(default_crs_schema(), default_fatca_schema())
-            self.finished.emit(service.generate(self.kinds, rows, self.profile, self.excel_path, overwrite=True))
+            phase_started_at: dict[tuple[str, str], float] = {}
+
+            def report_generation_progress(event: dict[str, Any]) -> None:
+                phase = str(event.get("phase") or "Processando")
+                kind = str(event.get("kind") or "")
+                processed = int(event.get("processed") or 0)
+                total = int(event.get("total") or 0)
+                key = (phase, kind)
+                if processed == 0 or key not in phase_started_at:
+                    phase_started_at[key] = monotonic()
+                eta = "calculando"
+                if processed > 0 and total > 0:
+                    elapsed = max(monotonic() - phase_started_at[key], 0.001)
+                    remaining = max(total - processed, 0)
+                    eta = format_duration(int((elapsed / processed) * remaining))
+                current_record = self._mask_progress_record(str(event.get("current_record") or ""))
+                self.progress.emit(phase, kind, processed, total, current_record, eta)
+
+            self.finished.emit(
+                service.generate(
+                    self.kinds,
+                    rows,
+                    self.profile,
+                    self.excel_path,
+                    overwrite=True,
+                    progress_callback=report_generation_progress,
+                )
+            )
         except Exception as exc:
             self.failed.emit(str(exc))
 
@@ -135,6 +163,19 @@ class GenerateWorker(QObject):
         ]
         value = next((str(item).strip() for item in candidates if str(item or "").strip()), "")
         return f"linha {excel_row}" + (f" | {mask_value(value)}" if value else "")
+
+    def _mask_progress_record(self, value: str) -> str:
+        if not value:
+            return ""
+        if "|" in value:
+            prefix, suffix = value.rsplit("|", 1)
+            return f"{prefix.strip()} | {mask_value(suffix.strip())}"
+        if any(marker in value.lower() for marker in ("conta", "documento", "doc ")):
+            parts = value.rsplit(" ", 1)
+            if len(parts) == 2:
+                return f"{parts[0]} {mask_value(parts[1])}"
+            return mask_value(value)
+        return value
 
 
 class MainWindow(QMainWindow):
@@ -151,6 +192,12 @@ class MainWindow(QMainWindow):
         self.excel_reader = ExcelReader()
         self.thread: QThread | None = None
         self.worker: GenerateWorker | None = None
+        self._progress_started_at: float | None = None
+        self._progress_last_at: float | None = None
+        self._progress_base_text = ""
+        self.progress_timer = QTimer(self)
+        self.progress_timer.setInterval(1000)
+        self.progress_timer.timeout.connect(self.refresh_progress_status)
         self._build_ui()
 
     def _build_ui(self) -> None:
@@ -555,6 +602,7 @@ class MainWindow(QMainWindow):
         self.progress.setRange(0, 0)
         self.error_table.setRowCount(0)
         self.result_text.setPlainText("Lendo Excel e processando em segundo plano...")
+        self._start_progress_status("Lendo Excel e processando em segundo plano...")
         profile = self._table_to_profile()
         self.thread = QThread()
         self.worker = GenerateWorker(
@@ -575,23 +623,27 @@ class MainWindow(QMainWindow):
         self.thread.finished.connect(self.thread.deleteLater)
         self.thread.start()
 
-    def on_progress(self, phase: str, processed: int, total: int, current_record: str, eta: str) -> None:
+    def on_progress(self, phase: str, xml_kind: str, processed: int, total: int, current_record: str, eta: str) -> None:
         if total > 0:
             self.progress.setRange(0, total)
             self.progress.setValue(min(processed, total))
             remaining = max(total - processed, 0)
-            self.result_text.setPlainText(
-                f"{phase}...\n"
+            xml_line = f"XML atual: {xml_kind or '-'}\n"
+            current_line = f"Registro atual: {current_record or '-'}\n"
+            self._set_progress_text(
+                f"Etapa atual: {phase}\n"
+                f"{xml_line}"
                 f"Registros processados: {processed} de {total}\n"
                 f"Registros faltantes: {remaining}\n"
-                f"Registro atual: {current_record}\n"
+                f"{current_line}"
                 f"Previsao de finalizacao: {eta}"
             )
         else:
             self.progress.setRange(0, 0)
-            self.result_text.setPlainText(f"{phase}...\nRegistro atual: {current_record}")
+            self._set_progress_text(f"Etapa atual: {phase}\nXML atual: {xml_kind or '-'}\nRegistro atual: {current_record or '-'}")
 
     def on_generated(self, results: list[Any]) -> None:
+        self._stop_progress_status()
         self.progress.setRange(0, 100)
         self.progress.setValue(100)
         lines: list[str] = []
@@ -607,9 +659,40 @@ class MainWindow(QMainWindow):
                 self.error_table.setItem(row, col, QTableWidgetItem(str(value)))
 
     def on_failed(self, message: str) -> None:
+        self._stop_progress_status()
         self.progress.setRange(0, 100)
         self.progress.setValue(0)
         QMessageBox.critical(self, "Erro", f"Falha técnica:\n{message}\n\nLog: {logs_dir() / 'app.log'}")
+
+    def _start_progress_status(self, initial_text: str) -> None:
+        now = monotonic()
+        self._progress_started_at = now
+        self._progress_last_at = now
+        self._progress_base_text = initial_text
+        self.progress_timer.start()
+
+    def _set_progress_text(self, text: str) -> None:
+        self._progress_base_text = text
+        self._progress_last_at = monotonic()
+        self.refresh_progress_status()
+
+    def refresh_progress_status(self) -> None:
+        if self._progress_started_at is None:
+            return
+        now = monotonic()
+        elapsed = format_duration(int(now - self._progress_started_at))
+        since_update = format_duration(int(now - (self._progress_last_at or self._progress_started_at)))
+        self.result_text.setPlainText(
+            f"{self._progress_base_text}\n"
+            f"Tempo decorrido: {elapsed}\n"
+            f"Ultima atualizacao: ha {since_update}"
+        )
+
+    def _stop_progress_status(self) -> None:
+        self.progress_timer.stop()
+        self._progress_started_at = None
+        self._progress_last_at = None
+        self._progress_base_text = ""
 
     def open_output_folder(self) -> None:
         path = Path(self.crs_output_edit.text() or self.fatca_output_edit.text()).parent

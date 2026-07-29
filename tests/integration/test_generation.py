@@ -247,6 +247,54 @@ def test_fluxo_botao_simples_preserva_perfil_ditc_e_gera_arquivos(tmp_path: Path
         app.processEvents()
 
 
+def test_geracao_reporta_progresso_por_xml_e_conta(tmp_path: Path) -> None:
+    profile = infer_default_profile(["DocumentoCliente", "Tipo de documento", "NumConta", "NomeCliente", "SaldoTotal", "Endereco", "Cidade", "Estado", "Pais"])
+    profile.output.crs_path = str(tmp_path / "progresso_CRS.xml")
+    profile.output.fatca_path = str(tmp_path / "progresso_FATCA.xml")
+    rows = [
+        {
+            "DocumentoCliente": "06360698501",
+            "Tipo de documento": "PF",
+            "NumConta": "1001",
+            "NomeCliente": "Cliente Um",
+            "SaldoTotal": "10",
+            "Endereco": "Rua A",
+            "Cidade": "Sao Paulo",
+            "Estado": "SP",
+            "Pais": "BR",
+            "_excel_row": 2,
+        },
+        {
+            "DocumentoCliente": "09030562595",
+            "Tipo de documento": "PF",
+            "NumConta": "1002",
+            "NomeCliente": "Cliente Dois",
+            "SaldoTotal": "20",
+            "Endereco": "Rua B",
+            "Cidade": "Rio de Janeiro",
+            "Estado": "RJ",
+            "Pais": "BR",
+            "_excel_row": 3,
+        },
+    ]
+    events: list[dict[str, object]] = []
+
+    results = GenerationService(default_crs_schema(), default_fatca_schema()).generate(
+        ["crs", "fatca"],
+        rows,
+        profile,
+        Path("entrada.xlsx"),
+        overwrite=True,
+        progress_callback=events.append,
+    )
+
+    assert [result.valid for result in results] == [True, True]
+    assert any(event["phase"] == "Escrevendo XML" and event["kind"] == "CRS" and event["processed"] == 1 for event in events)
+    assert any(event["phase"] == "Escrevendo XML" and event["kind"] == "FATCA" and event["processed"] == 1 for event in events)
+    assert any(event["phase"] == "Montando dados" and event["kind"] == "CRS" and "1001" in str(event["current_record"]) for event in events)
+    assert any(event["phase"] == "Validando XSD" and event["kind"] == "FATCA" for event in events)
+
+
 def test_selecao_do_excel_nao_le_planilha_inteira_na_interface() -> None:
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     qtwidgets = pytest.importorskip("PySide6.QtWidgets")
