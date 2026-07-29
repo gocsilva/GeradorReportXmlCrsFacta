@@ -247,6 +247,34 @@ def test_fluxo_botao_simples_preserva_perfil_ditc_e_gera_arquivos(tmp_path: Path
         app.processEvents()
 
 
+def test_selecao_do_excel_nao_le_planilha_inteira_na_interface() -> None:
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    qtwidgets = pytest.importorskip("PySide6.QtWidgets")
+    from crs_fatca_generator.gui.main_window import MainWindow
+
+    excel_path = Path("ExemplosDados/novo_layout_dados_mock.xlsx")
+    assert excel_path.exists()
+    app = qtwidgets.QApplication.instance() or qtwidgets.QApplication([])
+    window = MainWindow()
+    try:
+        def fail_if_full_read(*args: object, **kwargs: object) -> list[dict[str, object]]:
+            raise AssertionError("A selecao do Excel nao deve chamar read_rows completo na thread da interface.")
+
+        window.excel_reader.read_rows = fail_if_full_read  # type: ignore[method-assign]
+        window.excel_path = excel_path
+        window.excel_path_edit.setText(str(excel_path))
+        window.sheet_combo.clear()
+        window.sheet_combo.addItems(window.excel_reader.list_sheets(excel_path))
+        window.load_preview()
+
+        assert window.rows == []
+        assert 0 < len(window.preview_rows) <= 25
+        assert "Previa:" in window.preview_info.text()
+    finally:
+        window.close()
+        app.processEvents()
+
+
 def test_controlling_person_service_detecta_blocos_dinamicos_e_normaliza() -> None:
     headers = controlling_headers(5)
     values = [""] * len(headers)

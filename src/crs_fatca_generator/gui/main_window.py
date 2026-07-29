@@ -5,9 +5,10 @@ import logging
 import os
 from copy import deepcopy
 from pathlib import Path
+from time import monotonic
 from typing import Any
 
-from PySide6.QtCore import QObject, QThread, Signal
+from PySide6.QtCore import QObject, QSignalBlocker, QThread, Signal
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QApplication,
@@ -56,27 +57,84 @@ def neutral_start_dir() -> str:
 class GenerateWorker(QObject):
     finished = Signal(list)
     failed = Signal(str)
+    progress = Signal(str, int, int, str, str)
 
-    def __init__(self, kinds: list[str], rows: list[dict[str, Any]], profile: MappingProfile, excel_path: Path) -> None:
+    def __init__(
+        self,
+        kinds: list[str],
+        rows: list[dict[str, Any]],
+        profile: MappingProfile,
+        excel_path: Path,
+        start_row: int | None = None,
+        end_row: int | None = None,
+    ) -> None:
         super().__init__()
         self.kinds = kinds
         self.rows = rows
         self.profile = profile
         self.excel_path = excel_path
+        self.start_row = start_row
+        self.end_row = end_row
 
     def run(self) -> None:
         try:
+            rows = self.rows
+            if self.excel_path and self.excel_path.exists() and self.profile.sheet_name:
+                started_at = monotonic()
+
+                def report_read_progress(processed: int, total: int, excel_row: int, row: dict[str, Any]) -> None:
+                    elapsed = max(monotonic() - started_at, 0.001)
+                    remaining = max(total - processed, 0)
+                    seconds_left = int((elapsed / max(processed, 1)) * remaining)
+                    self.progress.emit(
+                        "Lendo Excel",
+                        processed,
+                        total,
+                        self._record_label(row, excel_row),
+                        format_duration(seconds_left),
+                    )
+
+                logger.info(
+                    "TRACE_BUTTON_PIPELINE GenerateWorker.run -> ExcelReader.read_rows sheet=%s header_row=%s start_row=%s end_row=%s",
+                    self.profile.sheet_name,
+                    self.profile.header_row,
+                    self.start_row,
+                    self.end_row,
+                )
+                rows = ExcelReader().read_rows(
+                    self.excel_path,
+                    self.profile.sheet_name,
+                    self.profile.header_row,
+                    self.start_row,
+                    self.end_row,
+                    progress_callback=report_read_progress,
+                )
+            if not rows:
+                rows = [{"_excel_row": 0}]
+            self.progress.emit("Gerando XML", len(rows), len(rows), "Leitura concluida", "instantes")
             logger.info(
                 "TRACE_BUTTON_PIPELINE GenerateWorker.run -> GenerationService.generate kinds=%s rows=%s identifier_prefix=%s use_uuid=%s",
                 self.kinds,
-                len(self.rows),
+                len(rows),
                 self.profile.identifier_config.prefix,
                 self.profile.identifier_config.use_uuid,
             )
             service = GenerationService(default_crs_schema(), default_fatca_schema())
-            self.finished.emit(service.generate(self.kinds, self.rows, self.profile, self.excel_path, overwrite=True))
+            self.finished.emit(service.generate(self.kinds, rows, self.profile, self.excel_path, overwrite=True))
         except Exception as exc:
             self.failed.emit(str(exc))
+
+    def _record_label(self, row: dict[str, Any], excel_row: int) -> str:
+        candidates = [
+            row.get("AccountNumber"),
+            row.get("NumConta"),
+            row.get("Identification Number / CPF"),
+            row.get("DocumentoCliente"),
+            row.get("Name"),
+            row.get("NomeCliente"),
+        ]
+        value = next((str(item).strip() for item in candidates if str(item or "").strip()), "")
+        return f"linha {excel_row}" + (f" | {mask_value(value)}" if value else "")
 
 
 class MainWindow(QMainWindow):
@@ -86,6 +144,7 @@ class MainWindow(QMainWindow):
         self.resize(1180, 760)
         self.excel_path: Path | None = None
         self.rows: list[dict[str, Any]] = []
+        self.preview_rows: list[dict[str, Any]] = []
         self.headers: list[str] = []
         self.profile = MappingProfile()
         self.profile_service = ProfileService()
@@ -308,22 +367,26 @@ class MainWindow(QMainWindow):
             return
         self.excel_path = Path(path)
         self.excel_path_edit.setText(path)
-        self.sheet_combo.clear()
-        self.sheet_combo.addItems(self.excel_reader.list_sheets(self.excel_path))
-        self.load_preview()
-
-    def load_preview(self) -> None:
-        if not self.excel_path or not self.sheet_combo.currentText():
-            return
-        preview = self.excel_reader.preview(self.excel_path, self.sheet_combo.currentText(), self.header_row_spin.value(), limit=25)
-        self.headers = preview.headers
-        self.rows = self.excel_reader.read_rows(
+        self.result_text.setPlainText("Carregando previa do Excel...")
+        QApplication.processEvents()
+        preview = self.excel_reader.preview(
             self.excel_path,
-            preview.active_sheet,
+            None,
             self.header_row_spin.value(),
             self.start_row_spin.value() or None,
             self.end_row_spin.value() or None,
+            limit=25,
         )
+        self._apply_preview(preview)
+
+    def _apply_preview(self, preview: Any) -> None:
+        self.sheet_combo.clear()
+        with QSignalBlocker(self.sheet_combo):
+            self.sheet_combo.addItems(preview.sheets)
+            self.sheet_combo.setCurrentText(preview.active_sheet)
+        self.headers = preview.headers
+        self.preview_rows = preview.rows
+        self.rows = []
         self.preview_table.setColumnCount(len(preview.headers))
         self.preview_table.setHorizontalHeaderLabels(preview.headers)
         self.preview_table.setRowCount(len(preview.rows))
@@ -331,11 +394,24 @@ class MainWindow(QMainWindow):
             for c, header in enumerate(preview.headers):
                 self.preview_table.setItem(r, c, QTableWidgetItem(str(row.get(header, "") or "")))
         self.preview_info.setText(
-            f"Abas: {len(preview.sheets)} | Colunas: {len(preview.headers)} | Linhas carregadas: {len(self.rows)} | Duplicados: {', '.join(preview.duplicate_headers) or 'nenhum'}"
+            f"Abas: {len(preview.sheets)} | Colunas: {len(preview.headers)} | Previa: {len(preview.rows)} linhas | Duplicados: {', '.join(preview.duplicate_headers) or 'nenhum'}"
         )
         self.auto_map()
         self.configure_simple_outputs()
         self.update_missing_fields()
+
+    def load_preview(self) -> None:
+        if not self.excel_path or not self.sheet_combo.currentText():
+            return
+        preview = self.excel_reader.preview(
+            self.excel_path,
+            self.sheet_combo.currentText(),
+            self.header_row_spin.value(),
+            self.start_row_spin.value() or None,
+            self.end_row_spin.value() or None,
+            limit=25,
+        )
+        self._apply_preview(preview)
 
     def auto_map(self) -> None:
         inferred = infer_default_profile(self.headers)
@@ -362,7 +438,7 @@ class MainWindow(QMainWindow):
         if not self.excel_path:
             QMessageBox.warning(self, "Executar", "Selecione primeiro o arquivo Excel com os dados.")
             return
-        if not self.rows:
+        if not self.headers:
             self.load_preview()
         missing = self.update_missing_fields()
         if missing:
@@ -453,7 +529,7 @@ class MainWindow(QMainWindow):
     def preview_xml(self) -> None:
         try:
             profile = self._table_to_profile()
-            rows = self.rows or [{"_excel_row": 0}]
+            rows = self.preview_rows or self.rows or [{"_excel_row": 0}]
             mapper = MappingService()
             blocks = []
             for kind in self.kinds():
@@ -476,22 +552,44 @@ class MainWindow(QMainWindow):
         if self.fatca_check.isChecked() and not self.fatca_output_edit.text().strip():
             QMessageBox.warning(self, "Geração", "Escolha o caminho completo do XML FATCA.")
             return
-        if not self.rows:
-            self.rows = [{"_excel_row": 0}]
         self.progress.setRange(0, 0)
         self.error_table.setRowCount(0)
-        self.result_text.setPlainText("Processando...")
+        self.result_text.setPlainText("Lendo Excel e processando em segundo plano...")
         profile = self._table_to_profile()
         self.thread = QThread()
-        self.worker = GenerateWorker(self.kinds(), self.rows, profile, self.excel_path or Path(""))
+        self.worker = GenerateWorker(
+            self.kinds(),
+            self.rows,
+            profile,
+            self.excel_path or Path(""),
+            self.start_row_spin.value() or None,
+            self.end_row_spin.value() or None,
+        )
         self.worker.moveToThread(self.thread)
         self.thread.started.connect(self.worker.run)
+        self.worker.progress.connect(self.on_progress)
         self.worker.finished.connect(self.on_generated)
         self.worker.failed.connect(self.on_failed)
         self.worker.finished.connect(self.thread.quit)
         self.worker.failed.connect(self.thread.quit)
         self.thread.finished.connect(self.thread.deleteLater)
         self.thread.start()
+
+    def on_progress(self, phase: str, processed: int, total: int, current_record: str, eta: str) -> None:
+        if total > 0:
+            self.progress.setRange(0, total)
+            self.progress.setValue(min(processed, total))
+            remaining = max(total - processed, 0)
+            self.result_text.setPlainText(
+                f"{phase}...\n"
+                f"Registros processados: {processed} de {total}\n"
+                f"Registros faltantes: {remaining}\n"
+                f"Registro atual: {current_record}\n"
+                f"Previsao de finalizacao: {eta}"
+            )
+        else:
+            self.progress.setRange(0, 0)
+            self.result_text.setPlainText(f"{phase}...\nRegistro atual: {current_record}")
 
     def on_generated(self, results: list[Any]) -> None:
         self.progress.setRange(0, 100)
@@ -556,6 +654,18 @@ def _mask_tag(text: str, tag: str) -> str:
     import re
 
     return re.sub(rf"(<[^>]*{tag}[^>]*>)([^<]+)(</[^>]*{tag}>)", lambda m: m.group(1) + mask_value(m.group(2)) + m.group(3), text)
+
+
+def format_duration(seconds: int) -> str:
+    if seconds <= 1:
+        return "instantes"
+    minutes, sec = divmod(seconds, 60)
+    hours, minutes = divmod(minutes, 60)
+    if hours:
+        return f"{hours}h {minutes:02d}min {sec:02d}s"
+    if minutes:
+        return f"{minutes}min {sec:02d}s"
+    return f"{sec}s"
 
 
 def run_gui() -> int:

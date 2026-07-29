@@ -31,3 +31,31 @@ def test_le_xlsm_sem_executar_macro(tmp_path: Path) -> None:
     make_book(path)
     preview = ExcelReader().preview(path, "Dados", header_row=1)
     assert preview.active_sheet == "Dados"
+
+
+def test_read_rows_reporta_progresso_com_total_e_linha_atual(tmp_path: Path) -> None:
+    path = tmp_path / "entrada.xlsx"
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Dados"
+    ws.append(["AccountNumber", "Name"])
+    for index in range(1, 206):
+        ws.append([f"ACC{index}", f"Cliente {index}"])
+    wb.save(path)
+
+    events: list[tuple[int, int, int, str]] = []
+
+    rows = ExcelReader().read_rows(
+        path,
+        "Dados",
+        1,
+        progress_callback=lambda processed, total, excel_row, row: events.append(
+            (processed, total, excel_row, str(row["AccountNumber"]))
+        ),
+    )
+
+    assert len(rows) == 205
+    assert events[0] == (1, 205, 2, "ACC1")
+    assert events[-1] == (205, 205, 206, "ACC205")
+    assert (100, 205, 101, "ACC100") in events
+    assert (200, 205, 201, "ACC200") in events

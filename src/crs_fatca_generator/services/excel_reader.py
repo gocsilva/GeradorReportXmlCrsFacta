@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import openpyxl
 
@@ -71,6 +71,7 @@ class ExcelReader:
         header_row: int,
         start_row: int | None = None,
         end_row: int | None = None,
+        progress_callback: Callable[[int, int, int, dict[str, Any]], None] | None = None,
     ) -> list[dict[str, Any]]:
         wb = openpyxl.load_workbook(path, read_only=True, data_only=True, keep_vba=False)
         try:
@@ -79,6 +80,7 @@ class ExcelReader:
             headers = self._unique_headers(raw_headers)
             first_data_row = start_row or header_row + 1
             last_row = end_row or sheet.max_row
+            total_rows = max(last_row - first_data_row + 1, 0)
             rows: list[dict[str, Any]] = []
             for index, row in enumerate(sheet.iter_rows(min_row=first_data_row, max_row=last_row, values_only=True), first_data_row):
                 item = {headers[i]: row[i] if i < len(row) else None for i in range(len(headers))}
@@ -88,6 +90,9 @@ class ExcelReader:
                 item["_raw_values"] = list(row[: len(headers)])
                 if any(value not in (None, "") for key, value in item.items() if not key.startswith("_")):
                     rows.append(item)
+                processed = index - first_data_row + 1
+                if progress_callback and (processed == 1 or processed % 100 == 0 or processed == total_rows):
+                    progress_callback(processed, total_rows, index, item)
             return rows
         finally:
             wb.close()

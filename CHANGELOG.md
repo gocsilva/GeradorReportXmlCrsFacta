@@ -10,3 +10,5 @@
 - Separa US Tax ID do documento brasileiro no FATCA, omite TIN ausente conforme XSD em modo teste e adiciona relatorio de pendencias.
 - Amplia auditoria para XLSX multiabas, CSV registro a registro, manifesto JSON, validacao XSD, conciliacao e identificadores DITC sequenciais sem UUID.
 - Reforca pacote portatil sem administrador: abrir pelo `.cmd`, dados internos no perfil do usuario e saida automatica sem configuracao manual.
+- Corrige travamento aparente ao selecionar Excel grande: a interface carrega somente a previa e a leitura completa ocorre em segundo plano ao executar.
+- Adiciona progresso de leitura com registros processados, faltantes, registro/linha atual e previsao de finalizacao.
