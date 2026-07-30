@@ -93,6 +93,27 @@ def test_gera_crs_e_fatca_validos(tmp_path: Path) -> None:
     assert (tmp_path / "FATCA_teste.xml").exists()
 
 
+def test_crs_usa_apenas_linhas_usperson_true_quando_coluna_existe(tmp_path: Path) -> None:
+    headers = ["DocumentoCliente", "Tipo de documento", "NumConta", "NomeCliente", "SaldoTotal", "Endereco", "Cidade", "Pais", "USPerson"]
+    profile = infer_default_profile(headers)
+    profile.output.crs_path = str(tmp_path / "crs_usperson.xml")
+    rows = [
+        {"DocumentoCliente": "06360698501", "Tipo de documento": "PF", "NumConta": "ACC-TRUE", "NomeCliente": "Cliente True", "SaldoTotal": "10", "Endereco": "Rua A", "Cidade": "Sao Paulo", "Pais": "BR", "USPerson": "true", "_excel_row": 2},
+        {"DocumentoCliente": "09030562595", "Tipo de documento": "PF", "NumConta": "ACC-FALSE", "NomeCliente": "Cliente False", "SaldoTotal": "20", "Endereco": "Rua B", "Cidade": "Rio", "Pais": "BR", "USPerson": "false", "_excel_row": 3},
+        {"DocumentoCliente": "16011329721", "Tipo de documento": "PF", "NumConta": "ACC-SIM", "NomeCliente": "Cliente Sim", "SaldoTotal": "30", "Endereco": "Rua C", "Cidade": "Curitiba", "Pais": "BR", "USPerson": "sim", "_excel_row": 4},
+    ]
+
+    result = GenerationService(default_crs_schema(), default_fatca_schema()).generate(["crs"], rows, profile, Path("entrada.xlsx"), overwrite=True)[0]
+
+    assert result.valid is True
+    assert result.summary["filtro_crs_usperson"] == "aplicado"
+    assert result.summary["linhas_crs_usadas"] == 2
+    assert result.summary["linhas_crs_ignoradas_por_usperson"] == 1
+    tree = etree.parse(str(tmp_path / "crs_usperson.xml"))
+    accounts = [item.text for item in tree.findall(f".//{{{CRS_NS}}}AccountNumber")]
+    assert accounts == ["ACC-TRUE", "ACC-SIM"]
+
+
 def test_geracao_crs_respeita_limite_de_tamanho_sem_quebrar_account_report(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(splitter_module, "_mb_to_bytes", lambda _value: 1800)
     profile = infer_default_profile(["DocumentoCliente", "Tipo de documento", "NumConta", "NomeCliente", "SaldoTotal", "Endereco", "Cidade", "Pais"])
@@ -273,18 +294,50 @@ def test_fluxo_botao_simples_preserva_perfil_ditc_e_gera_arquivos(tmp_path: Path
 
         crs = etree.parse(str(crs_path))
         fatca = etree.parse(str(fatca_path))
+        account_reports = crs.findall(f".//{{{CRS_NS}}}AccountReport")
         organisations = crs.findall(f".//{{{CRS_NS}}}AccountHolder/{{{CRS_NS}}}Organisation")
-        assert len(organisations) == 11
-        assert sum(1 for org in organisations for item in org.findall(f"{{{CRS_NS}}}TIN") if item.get("issuedBy") == "BR") == 11
-        assert sum(1 for org in organisations for item in org.findall(f"{{{CRS_NS}}}IN") if item.get("issuedBy") == "BR") == 0
+        assert len(account_reports) == 0
+        assert len(organisations) == 0
         assert crs.findtext(f".//{{{CRS_NS}}}ReportingFI/{{{CRS_NS}}}IN") == "FI107442"
-        assert crs.find(f".//{{{CRS_NS}}}Organisation/{{{CRS_NS}}}BirthInfo") is None
         assert fatca.find(".//{urn:oecd:ties:fatca:v2}AccountHolder//{urn:oecd:ties:stffatcatypes:v2}TIN") is None
 
         manifest = json.loads(manifest_path.read_text(encoding="utf-8-sig"))
         assert manifest["identifier_profile"] == "DITC_SEQUENCE"
         assert manifest["final_status"] == "NAO APTO PARA ENVIO"
         assert manifest["counts"]["total de registros recebidos"] == 29
+    finally:
+        window.close()
+        app.processEvents()
+
+
+def test_botao_simples_respeita_checkboxes_de_crs_e_fatca(tmp_path: Path) -> None:
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    qtwidgets = pytest.importorskip("PySide6.QtWidgets")
+    from crs_fatca_generator.gui.main_window import MainWindow
+
+    app = qtwidgets.QApplication.instance() or qtwidgets.QApplication([])
+    window = MainWindow()
+    captured: dict[str, object] = {}
+    try:
+        window.excel_path = tmp_path / "entrada.xlsx"
+        window.headers = ["DocumentoCliente", "Tipo de documento", "NumConta", "NomeCliente", "SaldoTotal", "Endereco", "Cidade", "Pais"]
+        window.sheet_combo.clear()
+        window.sheet_combo.addItem("Dados")
+        window.crs_check.setChecked(False)
+        window.fatca_check.setChecked(True)
+        window.configure_simple_outputs = lambda: None  # type: ignore[method-assign]
+
+        def fake_generate(ignore_invalid_records: bool = False) -> None:
+            captured["kinds"] = window.kinds()
+            captured["declaration"] = window._table_to_profile().declaration
+
+        window.generate_xml = fake_generate  # type: ignore[method-assign]
+        window.execute_simple()
+
+        assert captured["kinds"] == ["fatca"]
+        assert captured["declaration"] == "fatca"
+        assert window.crs_check.isChecked() is False
+        assert window.fatca_check.isChecked() is True
     finally:
         window.close()
         app.processEvents()
@@ -520,6 +573,7 @@ def test_fluxo_botao_com_exemplo_novo_layout_gera_dois_controladores_mesmo_accou
     try:
         sheet = workbook["Planilha1"]
         target_row = 3
+        sheet.cell(target_row, 5).value = "true"
         sheet.cell(target_row, 13).value = "CRS101"
         sheet.cell(target_row, 25).value = "JOAO"
         sheet.cell(target_row, 26).value = "SILVA"
@@ -661,6 +715,7 @@ def test_geracao_pode_ignorar_linha_com_controlador_invalido(tmp_path: Path) -> 
     bad_values[1] = "00022003000126"
     bad_values[2] = "EMPRESA COM CONTROLADOR INVALIDO"
     bad_values[3] = "ACC-BAD"
+    bad_values[4] = "true"
     bad_values[8] = "BR"
     bad_values[12] = "CRS101"
     bad_values[20] = "10"
@@ -674,6 +729,7 @@ def test_geracao_pode_ignorar_linha_com_controlador_invalido(tmp_path: Path) -> 
     good_values[1] = "06360698501"
     good_values[2] = "CLIENTE OK"
     good_values[3] = "ACC-OK"
+    good_values[4] = "true"
     good_values[8] = "BR"
     good_values[20] = "25"
     good_values[21] = "USD"

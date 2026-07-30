@@ -64,6 +64,17 @@ class GenerationService:
             return results
         for kind in kinds:
             kind_name = kind.upper()
+            kind_rows = prepared.rows
+            crs_usperson_summary: dict[str, int | str] = {}
+            if kind == "crs":
+                kind_rows, skipped_rows, filter_status = self._crs_rows_by_us_person(prepared.rows)
+                crs_usperson_summary = {
+                    "filtro_crs_usperson": filter_status,
+                    "linhas_crs_usadas": len(kind_rows),
+                    "linhas_crs_ignoradas_por_usperson": skipped_rows,
+                }
+                if filter_status == "aplicado":
+                    self._emit_progress(progress_callback, "Filtrando CRS por USPerson", kind_name, len(kind_rows), len(prepared.rows), "")
             schema_path = self.crs_schema if kind == "crs" else self.fatca_schema
             self._emit_progress(progress_callback, "Carregando schema", kind_name, 0, 1, schema_path.name)
             enums = SchemaInspector().enums(schema_path)
@@ -73,8 +84,14 @@ class GenerationService:
             def mapping_progress(processed: int, total: int, row: dict[str, Any]) -> None:
                 self._emit_progress(progress_callback, "Montando dados", kind_name, processed, total, self._row_label(row))
 
-            self._emit_progress(progress_callback, "Montando dados", kind_name, 0, len(prepared.rows), "")
-            report = self.mapping_service.build_report(kind, prepared.rows, profile, file_hash, progress_callback=mapping_progress)
+            self._emit_progress(progress_callback, "Montando dados", kind_name, 0, len(kind_rows), "")
+            report_rows = kind_rows
+            force_empty_accounts = kind == "crs" and not kind_rows and bool(prepared.rows)
+            if force_empty_accounts:
+                report_rows = [prepared.rows[0]]
+            report = self.mapping_service.build_report(kind, report_rows, profile, file_hash, progress_callback=mapping_progress)
+            if force_empty_accounts:
+                report.accounts = []
             self._emit_progress(progress_callback, "Montando dados", kind_name, len(getattr(report, "accounts", [])), len(getattr(report, "accounts", [])), "")
             reports[kind] = report
             self._emit_progress(progress_callback, "Validando regras", kind_name, 0, 1, "")
@@ -86,7 +103,7 @@ class GenerationService:
                     ValidationIssue("erro", "OUT001", f"O arquivo ja existe: {output_path}", "saida", suggestion="Escolha outro nome ou confirme sobrescrita.")
                 )
             if any(issue.level == "erro" for issue in business_issues):
-                results.append(GenerationResult(kind, str(output_path), False, business_issues, {**self._summary(report, "nao gerado"), **audit_summary, **self._fiscal_summary(kind, profile)}))
+                results.append(GenerationResult(kind, str(output_path), False, business_issues, {**self._summary(report, "nao gerado"), **audit_summary, **self._fiscal_summary(kind, profile), **crs_usperson_summary}))
                 continue
             accounts_total = max(len(getattr(report, "accounts", [])), 1)
 
@@ -123,6 +140,7 @@ class GenerationService:
                         **self._summary(report, "valido" if valid else "invalido"),
                         **audit_summary,
                         **self._fiscal_summary(kind, profile),
+                        **crs_usperson_summary,
                         "schema_hashes": ",".join(bundle.hashes.values()),
                         "arquivos_xml": "; ".join(xml_paths),
                         "quantidade_arquivos_xml": len(xml_paths),
@@ -211,6 +229,12 @@ class GenerationService:
             }
         return {"arquivo_teste": "nao", "status_fiscal": "conforme_politica_configurada"}
 
+    def _crs_rows_by_us_person(self, rows: list[dict[str, object]]) -> tuple[list[dict[str, object]], int, str]:
+        if not any(_usperson_value(row) is not None for row in rows):
+            return rows, 0, "coluna_ausente"
+        filtered = [row for row in rows if _is_true_value(_usperson_value(row))]
+        return filtered, len(rows) - len(filtered), "aplicado"
+
     def _emit_progress(
         self,
         progress_callback: Callable[[dict[str, Any]], None] | None,
@@ -250,3 +274,18 @@ class GenerationService:
         if doc_ref:
             return f"doc {doc_ref}"
         return ""
+
+
+def _usperson_value(row: dict[str, object]) -> object | None:
+    for key, value in row.items():
+        normalized = "".join(char for char in str(key).lower() if char.isalnum())
+        if normalized == "usperson":
+            return value
+    return None
+
+
+def _is_true_value(value: object | None) -> bool:
+    if isinstance(value, bool):
+        return value
+    text = str(value or "").strip().lower()
+    return text in {"true", "1", "sim", "s", "yes", "y", "verdadeiro", "x"}

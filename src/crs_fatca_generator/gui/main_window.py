@@ -414,6 +414,16 @@ class MainWindow(QMainWindow):
         fatca_row.addWidget(fatca_btn)
         out.addRow("Destino CRS", crs_row)
         out.addRow("Destino FATCA", fatca_row)
+        self.crs_generate_check = QCheckBox("Criar XML CRS")
+        self.crs_generate_check.setChecked(self.crs_check.isChecked())
+        self.fatca_generate_check = QCheckBox("Criar XML FATCA")
+        self.fatca_generate_check.setChecked(self.fatca_check.isChecked())
+        self.crs_check.toggled.connect(self.crs_generate_check.setChecked)
+        self.crs_generate_check.toggled.connect(self.crs_check.setChecked)
+        self.fatca_check.toggled.connect(self.fatca_generate_check.setChecked)
+        self.fatca_generate_check.toggled.connect(self.fatca_check.setChecked)
+        out.addRow("Gerar CRS", self.crs_generate_check)
+        out.addRow("Gerar FATCA", self.fatca_generate_check)
         self.crs_limit_spin = QSpinBox()
         self.crs_limit_spin.setRange(0, 100_000)
         self.crs_limit_spin.setValue(0)
@@ -579,15 +589,13 @@ class MainWindow(QMainWindow):
                 "O Excel nao tem todas as colunas obrigatorias:\n\n" + "\n".join(f"- {item}" for item in missing),
             )
             return
-        self.crs_check.setChecked(True)
-        self.fatca_check.setChecked(True)
         self.configure_simple_outputs()
         self.tabs.setCurrentIndex(5)
         self.generate_xml()
 
     def _table_to_profile(self) -> MappingProfile:
         profile = MappingProfile(name="Perfil GUI", sheet_name=self.sheet_combo.currentText(), header_row=self.header_row_spin.value())
-        profile.declaration = self.profile.declaration
+        profile.declaration = self._declaration_from_checks()
         profile.xsd_hashes = dict(self.profile.xsd_hashes)
         profile.identifier_config = deepcopy(self.profile.identifier_config)
         if profile.identifier_config.use_uuid or profile.identifier_config.prefix.strip().upper() == "AUTO":
@@ -628,6 +636,7 @@ class MainWindow(QMainWindow):
             self.mapping_table.setItem(row, 5, QTableWidgetItem(f"{rule.fixed_value}{suffix}"))
 
     def _profile_to_controls(self) -> None:
+        self._apply_declaration_to_checks(getattr(self.profile, "declaration", "both"))
         self._profile_to_table()
         for key, edit in self.group_edits.items():
             edit.setText(getattr(self.profile.grouping, key))
@@ -652,6 +661,22 @@ class MainWindow(QMainWindow):
         if self.fatca_check.isChecked():
             kinds.append("fatca")
         return kinds
+
+    def _declaration_from_checks(self) -> str:
+        crs = self.crs_check.isChecked()
+        fatca = self.fatca_check.isChecked()
+        if crs and fatca:
+            return "both"
+        if crs:
+            return "crs"
+        if fatca:
+            return "fatca"
+        return "none"
+
+    def _apply_declaration_to_checks(self, declaration: str) -> None:
+        value = (declaration or "both").strip().lower()
+        self.crs_check.setChecked(value in {"both", "crs"})
+        self.fatca_check.setChecked(value in {"both", "fatca"})
 
     def pick_output(self, edit: QLineEdit) -> None:
         initial = edit.text().strip() or neutral_start_dir()
@@ -847,7 +872,7 @@ class MainWindow(QMainWindow):
         if not path:
             return
         self.profile = self.profile_service.load(Path(path))
-        self._profile_to_table()
+        self._profile_to_controls()
         self.crs_output_edit.setText(self.profile.output.crs_path)
         self.fatca_output_edit.setText(self.profile.output.fatca_path)
         self.crs_limit_spin.setValue(getattr(self.profile.output, "crs_size_limit_mb", 0))

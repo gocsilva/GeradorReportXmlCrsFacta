@@ -21,3 +21,5 @@
 - Permite uma segunda geracao ignorando registros com erro de linha, registrando as remocoes na auditoria como `ERRO_IGNORADO`.
 - Adiciona limite opcional de tamanho por XML CRS/FATCA; `0 MB` significa sem limite e partes respeitam `AccountReport` inteiro.
 - Adiciona aba para dividir XML CRS/FATCA existente em partes por tamanho sem quebrar registros.
+- Adiciona checkboxes de geracao CRS/FATCA marcados por padrao e respeitados pelo botao simples.
+- Aplica filtro CRS por `USPerson = true` quando a coluna existe no Excel.
