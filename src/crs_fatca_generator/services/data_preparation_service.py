@@ -1112,7 +1112,11 @@ class DataPreparationService:
         paths = []
         if excel_path:
             paths.append(excel_path)
-        paths.extend(Path(result.xml_path) for result in results if getattr(result, "xml_path", ""))
+        for result in results:
+            for raw_path in str(getattr(result, "xml_path", "") or "").split(";"):
+                raw_path = raw_path.strip()
+                if raw_path:
+                    paths.append(Path(raw_path))
         paths.extend(path for path in (csv_path, xlsx_path, json_path) if path.name)
         rows = []
         for path in paths:

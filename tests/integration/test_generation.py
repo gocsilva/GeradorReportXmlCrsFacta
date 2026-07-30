@@ -23,7 +23,9 @@ from crs_fatca_generator.services.data_preparation_service import DataPreparatio
 from crs_fatca_generator.services.xml_validator import XmlValidator
 from crs_fatca_generator.services.xml_helpers import CRS_NS
 from crs_fatca_generator.services.controlling_person_service import detect_controlling_person_blocks, extract_controlling_persons
+from crs_fatca_generator.services.xml_splitter_service import XmlSplitterService
 import crs_fatca_generator.services.data_preparation_service as preparation_module
+import crs_fatca_generator.services.xml_splitter_service as splitter_module
 
 
 def exemplos_excel_path() -> Path:
@@ -89,6 +91,46 @@ def test_gera_crs_e_fatca_validos(tmp_path: Path) -> None:
     assert [result.valid for result in results] == [True, True]
     assert (tmp_path / "CRS_teste.xml").exists()
     assert (tmp_path / "FATCA_teste.xml").exists()
+
+
+def test_geracao_crs_respeita_limite_de_tamanho_sem_quebrar_account_report(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(splitter_module, "_mb_to_bytes", lambda _value: 1800)
+    profile = infer_default_profile(["DocumentoCliente", "Tipo de documento", "NumConta", "NomeCliente", "SaldoTotal", "Endereco", "Cidade", "Pais"])
+    profile.output.crs_path = str(tmp_path / "crs_limitado.xml")
+    profile.output.crs_size_limit_mb = 1
+    rows = [
+        {"DocumentoCliente": "06360698501", "Tipo de documento": "PF", "NumConta": "ACC-1", "NomeCliente": "Cliente Um", "SaldoTotal": "10", "Endereco": "Rua A", "Cidade": "Sao Paulo", "Pais": "BR", "_excel_row": 2},
+        {"DocumentoCliente": "09030562595", "Tipo de documento": "PF", "NumConta": "ACC-2", "NomeCliente": "Cliente Dois", "SaldoTotal": "20", "Endereco": "Rua B", "Cidade": "Rio", "Pais": "BR", "_excel_row": 3},
+        {"DocumentoCliente": "16011329721", "Tipo de documento": "PF", "NumConta": "ACC-3", "NomeCliente": "Cliente Tres", "SaldoTotal": "30", "Endereco": "Rua C", "Cidade": "Curitiba", "Pais": "BR", "_excel_row": 4},
+    ]
+
+    result = GenerationService(default_crs_schema(), default_fatca_schema()).generate(["crs"], rows, profile, Path("entrada.xlsx"), overwrite=True)[0]
+
+    paths = [Path(item.strip()) for item in result.xml_path.split(";")]
+    assert result.valid is True
+    assert len(paths) > 1
+    assert not (tmp_path / "crs_limitado.xml").exists()
+    assert sum(int(etree.parse(str(path)).xpath("count(.//*[local-name()='AccountReport'])")) for path in paths) == 3
+    assert all(XmlValidator().validate_file(path, default_crs_schema(), "crs") == [] for path in paths)
+
+
+def test_divide_xml_existente_por_account_report(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(splitter_module, "_mb_to_bytes", lambda _value: 1800)
+    profile = infer_default_profile(["DocumentoCliente", "Tipo de documento", "NumConta", "NomeCliente", "SaldoTotal", "Endereco", "Cidade", "Pais"])
+    profile.output.crs_path = str(tmp_path / "crs_original.xml")
+    rows = [
+        {"DocumentoCliente": "06360698501", "Tipo de documento": "PF", "NumConta": "ACC-1", "NomeCliente": "Cliente Um", "SaldoTotal": "10", "Endereco": "Rua A", "Cidade": "Sao Paulo", "Pais": "BR", "_excel_row": 2},
+        {"DocumentoCliente": "09030562595", "Tipo de documento": "PF", "NumConta": "ACC-2", "NomeCliente": "Cliente Dois", "SaldoTotal": "20", "Endereco": "Rua B", "Cidade": "Rio", "Pais": "BR", "_excel_row": 3},
+        {"DocumentoCliente": "16011329721", "Tipo de documento": "PF", "NumConta": "ACC-3", "NomeCliente": "Cliente Tres", "SaldoTotal": "30", "Endereco": "Rua C", "Cidade": "Curitiba", "Pais": "BR", "_excel_row": 4},
+    ]
+    result = GenerationService(default_crs_schema(), default_fatca_schema()).generate(["crs"], rows, profile, Path("entrada.xlsx"), overwrite=True)[0]
+    assert result.valid is True
+
+    parts = XmlSplitterService().split_existing_xml(tmp_path / "crs_original.xml", tmp_path / "partes", 1)
+
+    assert len(parts) > 1
+    assert sum(int(etree.parse(str(path)).xpath("count(.//*[local-name()='AccountReport'])")) for path in parts) == 3
+    assert all(XmlValidator().validate_file(path, default_crs_schema(), "crs") == [] for path in parts)
 
 
 def test_golden_files_validam_contra_xsd_real() -> None:

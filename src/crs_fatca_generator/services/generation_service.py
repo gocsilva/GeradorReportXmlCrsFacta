@@ -17,6 +17,7 @@ from crs_fatca_generator.services.mapping_service import MappingService
 from crs_fatca_generator.services.schema_inspector import SchemaInspector
 from crs_fatca_generator.services.schema_loader import SchemaLoader
 from crs_fatca_generator.services.xml_validator import XmlValidator
+from crs_fatca_generator.services.xml_splitter_service import XmlSplitterService
 
 
 logger = logging.getLogger(__name__)
@@ -92,23 +93,41 @@ class GenerationService:
             def write_progress(processed: int, total: int, account: object) -> None:
                 self._emit_progress(progress_callback, "Escrevendo XML", kind_name, processed, total, self._account_label(account))
 
+            def part_progress(processed: int, total: int, name: str) -> None:
+                self._emit_progress(progress_callback, "Separando XML por tamanho", kind_name, processed, total, name)
+
             self._emit_progress(progress_callback, "Escrevendo XML", kind_name, 0, accounts_total, str(output_path.name))
-            if kind == "crs":
-                tree = CrsGenerator().write(report, output_path, profile.output.pretty_print, progress_callback=write_progress)
+            size_limit = profile.output.crs_size_limit_mb if kind == "crs" else profile.output.fatca_size_limit_mb
+            if size_limit > 0:
+                written = XmlSplitterService().write_report_parts(kind, report, output_path, profile.output.pretty_print, size_limit, progress_callback=part_progress)
+            elif kind == "crs":
+                written = [(output_path, CrsGenerator().write(report, output_path, profile.output.pretty_print, progress_callback=write_progress))]
             else:
-                tree = FatcaGenerator().write(report, output_path, profile.output.pretty_print, progress_callback=write_progress)
+                written = [(output_path, FatcaGenerator().write(report, output_path, profile.output.pretty_print, progress_callback=write_progress))]
             self._emit_progress(progress_callback, "Escrevendo XML", kind_name, accounts_total, accounts_total, str(output_path.name))
             self._emit_progress(progress_callback, "Validando XSD", kind_name, 0, 1, schema_path.name)
-            xsd_issues = self.xml_validator.validate_tree(tree, schema_path, kind)
+            xsd_issues: list[ValidationIssue] = []
+            for part_index, (part_path, tree) in enumerate(written, 1):
+                self._emit_progress(progress_callback, "Validando XSD", kind_name, part_index, len(written), part_path.name)
+                xsd_issues.extend(self.xml_validator.validate_tree(tree, schema_path, kind))
             self._emit_progress(progress_callback, "Validando XSD", kind_name, 1, 1, schema_path.name)
             valid = not xsd_issues
+            xml_paths = [str(path) for path, _tree in written]
             results.append(
                 GenerationResult(
                     kind=kind,
-                    xml_path=str(output_path),
+                    xml_path="; ".join(xml_paths),
                     valid=valid,
                     issues=xsd_issues,
-                    summary={**self._summary(report, "valido" if valid else "invalido"), **audit_summary, **self._fiscal_summary(kind, profile), "schema_hashes": ",".join(bundle.hashes.values())},
+                    summary={
+                        **self._summary(report, "valido" if valid else "invalido"),
+                        **audit_summary,
+                        **self._fiscal_summary(kind, profile),
+                        "schema_hashes": ",".join(bundle.hashes.values()),
+                        "arquivos_xml": "; ".join(xml_paths),
+                        "quantidade_arquivos_xml": len(xml_paths),
+                        "limite_mb": size_limit,
+                    },
                 )
             )
         audit_total = max(len(prepared.original_rows), 1)

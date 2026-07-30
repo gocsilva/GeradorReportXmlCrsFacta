@@ -40,6 +40,8 @@ class OutputConfig:
     fatca_path: str = ""
     pretty_print: bool = True
     append_timestamp_to_name: bool = False
+    crs_size_limit_mb: int = 0
+    fatca_size_limit_mb: int = 0
 
 
 @dataclass

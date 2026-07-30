@@ -42,6 +42,7 @@ from crs_fatca_generator.services.file_hash import sha256_file
 from crs_fatca_generator.services.generation_service import GenerationService
 from crs_fatca_generator.services.mapping_service import MappingService, infer_default_profile, missing_simple_columns, simple_output_paths
 from crs_fatca_generator.services.profile_service import ProfileService
+from crs_fatca_generator.services.xml_splitter_service import XmlSplitterService
 from crs_fatca_generator.security.masking import mask_value
 
 
@@ -236,6 +237,7 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(self._mapping_tab(), "4. Mapeamento")
         self.tabs.addTab(self._grouping_tab(), "5. Agrupamentos")
         self.tabs.addTab(self._generate_tab(), "6. Validação e geração")
+        self.tabs.addTab(self._split_tab(), "7. Dividir XML")
 
         menu = self.menuBar().addMenu("Arquivo")
         open_profile = QAction("Abrir perfil", self)
@@ -412,6 +414,16 @@ class MainWindow(QMainWindow):
         fatca_row.addWidget(fatca_btn)
         out.addRow("Destino CRS", crs_row)
         out.addRow("Destino FATCA", fatca_row)
+        self.crs_limit_spin = QSpinBox()
+        self.crs_limit_spin.setRange(0, 100_000)
+        self.crs_limit_spin.setValue(0)
+        self.crs_limit_spin.setSuffix(" MB")
+        self.fatca_limit_spin = QSpinBox()
+        self.fatca_limit_spin.setRange(0, 100_000)
+        self.fatca_limit_spin.setValue(0)
+        self.fatca_limit_spin.setSuffix(" MB")
+        out.addRow("Limite CRS", self.crs_limit_spin)
+        out.addRow("Limite FATCA", self.fatca_limit_spin)
         layout.addLayout(out)
         actions = QHBoxLayout()
         preview = QPushButton("Pré-visualizar XML")
@@ -443,6 +455,41 @@ class MainWindow(QMainWindow):
         self.error_table.setColumnCount(5)
         self.error_table.setHorizontalHeaderLabels(["Nível", "Código", "Campo", "Linha", "Mensagem"])
         layout.addWidget(self.error_table)
+        return page
+
+    def _split_tab(self) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        form = QFormLayout()
+        self.split_input_edit = QLineEdit()
+        self.split_input_edit.setReadOnly(True)
+        input_btn = QPushButton("Selecionar XML")
+        input_btn.clicked.connect(self.pick_split_input)
+        input_row = QHBoxLayout()
+        input_row.addWidget(self.split_input_edit)
+        input_row.addWidget(input_btn)
+        self.split_output_edit = QLineEdit()
+        output_btn = QPushButton("Escolher pasta")
+        output_btn.clicked.connect(self.pick_split_output_dir)
+        output_row = QHBoxLayout()
+        output_row.addWidget(self.split_output_edit)
+        output_row.addWidget(output_btn)
+        self.split_limit_spin = QSpinBox()
+        self.split_limit_spin.setRange(1, 100_000)
+        self.split_limit_spin.setValue(10)
+        self.split_limit_spin.setSuffix(" MB")
+        form.addRow("XML CRS/FATCA", input_row)
+        form.addRow("Pasta de saída", output_row)
+        form.addRow("Tamanho por arquivo", self.split_limit_spin)
+        layout.addLayout(form)
+        split_btn = QPushButton("Dividir XML")
+        split_btn.clicked.connect(self.split_existing_xml)
+        layout.addWidget(split_btn)
+        self.split_progress = QProgressBar()
+        layout.addWidget(self.split_progress)
+        self.split_result_text = QTextEdit()
+        self.split_result_text.setReadOnly(True)
+        layout.addWidget(self.split_result_text)
         return page
 
     def select_excel(self) -> None:
@@ -565,6 +612,8 @@ class MainWindow(QMainWindow):
             profile.field_mappings[field] = MappingRule(source, column, fixed, transforms)
         profile.grouping = GroupingRules(**{key: edit.text().strip() for key, edit in self.group_edits.items()})
         profile.output = OutputConfig(self.crs_output_edit.text().strip(), self.fatca_output_edit.text().strip())
+        profile.output.crs_size_limit_mb = self.crs_limit_spin.value()
+        profile.output.fatca_size_limit_mb = self.fatca_limit_spin.value()
         return profile
 
     def _profile_to_table(self) -> None:
@@ -801,6 +850,53 @@ class MainWindow(QMainWindow):
         self._profile_to_table()
         self.crs_output_edit.setText(self.profile.output.crs_path)
         self.fatca_output_edit.setText(self.profile.output.fatca_path)
+        self.crs_limit_spin.setValue(getattr(self.profile.output, "crs_size_limit_mb", 0))
+        self.fatca_limit_spin.setValue(getattr(self.profile.output, "fatca_size_limit_mb", 0))
+
+    def pick_split_input(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(self, "Selecionar XML CRS/FATCA", neutral_start_dir(), "XML (*.xml)")
+        if not path:
+            return
+        self.split_input_edit.setText(path)
+        if not self.split_output_edit.text().strip():
+            self.split_output_edit.setText(str(Path(path).with_name(f"{Path(path).stem}_partes")))
+
+    def pick_split_output_dir(self) -> None:
+        path = QFileDialog.getExistingDirectory(self, "Escolher pasta de saída", neutral_start_dir())
+        if path:
+            self.split_output_edit.setText(path)
+
+    def split_existing_xml(self) -> None:
+        xml_path = Path(self.split_input_edit.text().strip())
+        output_dir = Path(self.split_output_edit.text().strip())
+        if not xml_path.exists():
+            QMessageBox.warning(self, "Dividir XML", "Selecione um XML CRS ou FATCA existente.")
+            return
+        if not output_dir:
+            QMessageBox.warning(self, "Dividir XML", "Escolha a pasta de saída.")
+            return
+        self.split_progress.setRange(0, 0)
+        self.split_result_text.setPlainText("Dividindo XML...")
+        QApplication.processEvents()
+
+        def report_progress(processed: int, total: int, name: str) -> None:
+            self.split_progress.setRange(0, total)
+            self.split_progress.setValue(processed)
+            self.split_result_text.setPlainText(f"Arquivos gerados: {processed} de {total}\nArquivo atual: {name}")
+            QApplication.processEvents()
+
+        try:
+            paths = XmlSplitterService().split_existing_xml(xml_path, output_dir, self.split_limit_spin.value(), progress_callback=report_progress)
+        except Exception as exc:
+            self.split_progress.setRange(0, 100)
+            self.split_progress.setValue(0)
+            QMessageBox.critical(self, "Dividir XML", f"Não foi possível dividir o XML:\n{exc}")
+            return
+        self.split_progress.setRange(0, max(len(paths), 1))
+        self.split_progress.setValue(len(paths))
+        lines = [f"XML dividido em {len(paths)} arquivo(s):", ""]
+        lines.extend(str(path) for path in paths)
+        self.split_result_text.setPlainText("\n".join(lines))
 
     def clear_history(self) -> None:
         from crs_fatca_generator.infrastructure.database import IdentifierStore

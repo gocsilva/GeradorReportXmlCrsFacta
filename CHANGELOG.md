@@ -19,3 +19,5 @@
 - Otimiza auditoria para arquivos grandes: CSV completo, XLSX resumido/amostral e manifesto amostral para evitar travamento visual em "Gerando auditoria".
 - Remove buscas quadraticas na auditoria usando indices por linha e por conta.
 - Permite uma segunda geracao ignorando registros com erro de linha, registrando as remocoes na auditoria como `ERRO_IGNORADO`.
+- Adiciona limite opcional de tamanho por XML CRS/FATCA; `0 MB` significa sem limite e partes respeitam `AccountReport` inteiro.
+- Adiciona aba para dividir XML CRS/FATCA existente em partes por tamanho sem quebrar registros.
