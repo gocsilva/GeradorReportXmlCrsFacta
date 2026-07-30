@@ -168,6 +168,31 @@ def test_nil_report_fatca_valido(tmp_path: Path) -> None:
     assert "NilReport" in (tmp_path / "FATCA_teste.xml").read_text(encoding="utf-8")
 
 
+def test_fatca_nil_report_por_checkbox_ignora_account_report(tmp_path: Path) -> None:
+    profile = build_sample_profile(tmp_path)
+    profile.output.fatca_nil_report = True
+    row = {
+        "DocumentoCliente": "06360698501",
+        "Tipo de documento": "PF",
+        "NumConta": "ACC-1",
+        "NomeCliente": "Cliente Um",
+        "SaldoTotal": "10",
+        "Endereco": "Rua A",
+        "Cidade": "Sao Paulo",
+        "Pais": "BR",
+        "_excel_row": 2,
+    }
+
+    result = GenerationService(default_crs_schema(), default_fatca_schema()).generate(["fatca"], [row], profile, overwrite=True)[0]
+
+    assert result.valid is True
+    tree = etree.parse(str(tmp_path / "FATCA_teste.xml"))
+    assert tree.xpath("count(.//*[local-name()='NilReport'])") == 1
+    assert tree.xpath("count(.//*[local-name()='AccountReport'])") == 0
+    assert tree.xpath("count(.//*[local-name()='ReportingFI'])") == 1
+    assert tree.xpath("count(.//*[local-name()='Warning'])") == 0
+
+
 def test_crs_controlling_person_valida(tmp_path: Path) -> None:
     profile = build_sample_profile(tmp_path)
     profile.field_mappings["holder.kind"] = MappingRule("fixed", fixed_value="organisation")

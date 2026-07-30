@@ -148,7 +148,8 @@ class MappingService:
         else:
             timestamp = datetime.now().replace(microsecond=0).isoformat()
         warning = self.value("message.warning", row, profile)
-        if kind == "fatca" and not warning and self.value("fatca.missing_us_tin_policy", row, profile, TECHNICAL_TEST_POLICY) == TECHNICAL_TEST_POLICY:
+        nil_enabled = self.value("nil_report.enabled", row, profile).lower() in {"sim", "s", "yes", "true", "1"}
+        if kind == "fatca" and not nil_enabled and not warning and self.value("fatca.missing_us_tin_policy", row, profile, TECHNICAL_TEST_POLICY) == TECHNICAL_TEST_POLICY:
             warning = "ARQUIVO TECNICO DE TESTE: tratamento do US Tax ID pendente de confirmacao fiscal; nao usar para envio definitivo."
         return MessageSpec(
             sending_company_in=self.value("message.sending_company_in", row, profile),

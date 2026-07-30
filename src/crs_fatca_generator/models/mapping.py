@@ -42,6 +42,7 @@ class OutputConfig:
     append_timestamp_to_name: bool = False
     crs_size_limit_mb: int = 0
     fatca_size_limit_mb: int = 0
+    fatca_nil_report: bool = False
 
 
 @dataclass

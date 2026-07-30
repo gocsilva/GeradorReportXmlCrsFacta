@@ -418,12 +418,17 @@ class MainWindow(QMainWindow):
         self.crs_generate_check.setChecked(self.crs_check.isChecked())
         self.fatca_generate_check = QCheckBox("Criar XML FATCA")
         self.fatca_generate_check.setChecked(self.fatca_check.isChecked())
+        self.fatca_nil_check = QCheckBox("Criar FATCA nulo (NilReport)")
+        self.fatca_nil_check.setChecked(False)
+        self.fatca_nil_check.setEnabled(self.fatca_check.isChecked())
         self.crs_check.toggled.connect(self.crs_generate_check.setChecked)
         self.crs_generate_check.toggled.connect(self.crs_check.setChecked)
         self.fatca_check.toggled.connect(self.fatca_generate_check.setChecked)
         self.fatca_generate_check.toggled.connect(self.fatca_check.setChecked)
+        self.fatca_check.toggled.connect(self.fatca_nil_check.setEnabled)
         out.addRow("Gerar CRS", self.crs_generate_check)
         out.addRow("Gerar FATCA", self.fatca_generate_check)
+        out.addRow("FATCA nulo", self.fatca_nil_check)
         self.crs_limit_spin = QSpinBox()
         self.crs_limit_spin.setRange(0, 100_000)
         self.crs_limit_spin.setValue(0)
@@ -582,7 +587,8 @@ class MainWindow(QMainWindow):
         if not self.headers:
             self.load_preview()
         missing = self.update_missing_fields()
-        if missing:
+        only_fatca_nil = self.fatca_check.isChecked() and self.fatca_nil_check.isChecked() and not self.crs_check.isChecked()
+        if missing and not only_fatca_nil:
             QMessageBox.warning(
                 self,
                 "Campos faltando",
@@ -622,6 +628,8 @@ class MainWindow(QMainWindow):
         profile.output = OutputConfig(self.crs_output_edit.text().strip(), self.fatca_output_edit.text().strip())
         profile.output.crs_size_limit_mb = self.crs_limit_spin.value()
         profile.output.fatca_size_limit_mb = self.fatca_limit_spin.value()
+        profile.output.fatca_nil_report = self.fatca_nil_check.isChecked()
+        profile.field_mappings["nil_report.enabled"] = MappingRule("fixed", fixed_value="sim" if profile.output.fatca_nil_report else "nao")
         return profile
 
     def _profile_to_table(self) -> None:
@@ -653,6 +661,7 @@ class MainWindow(QMainWindow):
                 widget.setCurrentIndex(max(index, 0))
             else:
                 widget.setText(rule.fixed_value)
+        self.fatca_nil_check.setChecked(self._profile_fatca_nil_enabled())
 
     def kinds(self) -> list[str]:
         kinds: list[str] = []
@@ -877,6 +886,12 @@ class MainWindow(QMainWindow):
         self.fatca_output_edit.setText(self.profile.output.fatca_path)
         self.crs_limit_spin.setValue(getattr(self.profile.output, "crs_size_limit_mb", 0))
         self.fatca_limit_spin.setValue(getattr(self.profile.output, "fatca_size_limit_mb", 0))
+        self.fatca_nil_check.setChecked(self._profile_fatca_nil_enabled())
+
+    def _profile_fatca_nil_enabled(self) -> bool:
+        nil_rule = self.profile.field_mappings.get("nil_report.enabled")
+        nil_from_mapping = bool(nil_rule and nil_rule.source == "fixed" and nil_rule.fixed_value.strip().lower() in {"sim", "s", "yes", "true", "1"})
+        return bool(getattr(self.profile.output, "fatca_nil_report", False)) or nil_from_mapping
 
     def pick_split_input(self) -> None:
         path, _ = QFileDialog.getOpenFileName(self, "Selecionar XML CRS/FATCA", neutral_start_dir(), "XML (*.xml)")

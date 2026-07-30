@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from crs_fatca_generator.models.domain import GenerationResult, ValidationIssue
-from crs_fatca_generator.models.mapping import MappingProfile
+from crs_fatca_generator.models.mapping import MappingProfile, MappingRule
 from crs_fatca_generator.services.business_validator import BusinessValidator
 from crs_fatca_generator.services.crs_generator import CrsGenerator
 from crs_fatca_generator.services.data_preparation_service import DataPreparationService, PreparedData
@@ -54,25 +54,39 @@ class GenerationService:
         audit_summary = self._audit_summary(prepared, audit_csv, audit_xlsx, audit_json)
         reports: dict[str, object] = {}
         if prepared.issues:
+            runnable_kinds: list[str] = []
             for kind in kinds:
+                if kind == "fatca" and bool(getattr(profile.output, "fatca_nil_report", False)):
+                    runnable_kinds.append(kind)
+                    continue
                 output_path = self._output_path(kind, profile)
                 results.append(GenerationResult(kind, str(output_path), False, prepared.issues, {**audit_summary, **self._fiscal_summary(kind, profile), "status": "nao gerado"}))
-            audit_total = max(len(prepared.original_rows), 1)
-            self._emit_progress(progress_callback, "Gerando auditoria: iniciando", "", 0, audit_total, "")
-            self._flush_identifier_store()
-            data_service.write_audit(prepared, self._audit_dir(profile), self._audit_stem(profile, excel_path), profile, excel_path, file_hash, results, reports, progress_callback)
-            self._emit_progress(progress_callback, "Gerando auditoria: finalizada", "", audit_total, audit_total, "")
-            return results
+            if not runnable_kinds:
+                audit_total = max(len(prepared.original_rows), 1)
+                self._emit_progress(progress_callback, "Gerando auditoria: iniciando", "", 0, audit_total, "")
+                self._flush_identifier_store()
+                data_service.write_audit(prepared, self._audit_dir(profile), self._audit_stem(profile, excel_path), profile, excel_path, file_hash, results, reports, progress_callback)
+                self._emit_progress(progress_callback, "Gerando auditoria: finalizada", "", audit_total, audit_total, "")
+                return results
+            kinds = runnable_kinds
         for kind in kinds:
             kind_name = kind.upper()
             kind_rows = prepared.rows
             fatca_usperson_summary: dict[str, int | str] = {}
             if kind == "fatca":
-                kind_rows, skipped_rows, filter_status = self._rows_by_us_person(prepared.rows)
+                nil_report_requested = bool(getattr(profile.output, "fatca_nil_report", False))
+                if nil_report_requested:
+                    kind_rows = []
+                    skipped_rows = len(prepared.rows)
+                    filter_status = "nil_report"
+                    profile.field_mappings["nil_report.enabled"] = MappingRule("fixed", fixed_value="sim")
+                else:
+                    kind_rows, skipped_rows, filter_status = self._rows_by_us_person(prepared.rows)
                 fatca_usperson_summary = {
                     "filtro_fatca_usperson": filter_status,
                     "linhas_fatca_usadas": len(kind_rows),
                     "linhas_fatca_ignoradas_por_usperson": skipped_rows,
+                    "fatca_nil_report": "sim" if nil_report_requested else "nao",
                 }
                 if filter_status == "aplicado":
                     self._emit_progress(progress_callback, "Filtrando FATCA por USPerson", kind_name, len(kind_rows), len(prepared.rows), "")
