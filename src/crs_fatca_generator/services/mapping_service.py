@@ -116,6 +116,8 @@ class MappingService:
             raw = self._auto_value(field, profile)
         elif rule.source == "empty":
             raw = ""
+        if is_empty(raw):
+            return default
         try:
             value = apply_transformations(raw, rule.transformations)
         except ValueError:

@@ -612,6 +612,60 @@ def test_cpf_invalido_bloqueia_geracao(tmp_path: Path) -> None:
     assert not (tmp_path / "crs.xml").exists()
 
 
+def test_geracao_pode_ignorar_linha_com_controlador_invalido(tmp_path: Path) -> None:
+    headers = controlling_headers(1)
+    bad_values = [""] * len(headers)
+    bad_values[0] = "PJ"
+    bad_values[1] = "00022003000126"
+    bad_values[2] = "EMPRESA COM CONTROLADOR INVALIDO"
+    bad_values[3] = "ACC-BAD"
+    bad_values[8] = "BR"
+    bad_values[12] = "CRS101"
+    bad_values[20] = "10"
+    bad_values[21] = "USD"
+    bad_values[22] = "OECD1"
+    bad_values[23:34] = ["OECD202", "JOAO", "SILVA", "CRS801", "BR", "11111111111", "BR", "OECD304", "BR", "Sao Paulo", "1980-01-01"]
+    bad_row = row_from_raw(headers, bad_values)
+
+    good_values = [""] * len(headers)
+    good_values[0] = "PF"
+    good_values[1] = "06360698501"
+    good_values[2] = "CLIENTE OK"
+    good_values[3] = "ACC-OK"
+    good_values[8] = "BR"
+    good_values[20] = "25"
+    good_values[21] = "USD"
+    good_values[22] = "OECD1"
+    good_row = row_from_raw(headers, good_values)
+    good_row["_excel_row"] = 3
+
+    profile = infer_default_profile(headers)
+    profile.output.crs_path = str(tmp_path / "ignorar_CRS.xml")
+    profile.output.fatca_path = str(tmp_path / "ignorar_FATCA.xml")
+    service = GenerationService(default_crs_schema(), default_fatca_schema())
+
+    blocked = service.generate(["crs"], [bad_row, good_row], profile, Path("entrada.xlsx"), overwrite=True)
+    assert blocked[0].valid is False
+    assert any(issue.code == "CP001" and issue.excel_row == 2 for issue in blocked[0].issues)
+    assert not (tmp_path / "ignorar_CRS.xml").exists()
+
+    generated = service.generate(
+        ["crs"],
+        [bad_row, good_row],
+        profile,
+        Path("entrada.xlsx"),
+        overwrite=True,
+        ignore_invalid_records=True,
+    )
+    assert generated[0].valid is True
+    crs = etree.parse(str(tmp_path / "ignorar_CRS.xml"))
+    assert crs.xpath("count(.//*[local-name()='AccountNumber' and text()='ACC-OK'])") == 1
+    assert crs.xpath("count(.//*[local-name()='AccountNumber' and text()='ACC-BAD'])") == 0
+    manifest = json.loads((tmp_path / "entrada_manifesto_auditoria.json").read_text(encoding="utf-8"))
+    assert manifest["counts"]["total excluido"] == 1
+    assert any(item["regra"] == "ERRO_IGNORADO" for item in manifest["excluded_records"])
+
+
 def _fatca_profile(tmp_path: Path) -> object:
     headers = ["DocumentoCliente", "Tipo de documento", "NumConta", "NomeCliente", "SaldoTotal", "Endereco", "Cidade", "Estado", "Pais"]
     profile = infer_default_profile(headers)

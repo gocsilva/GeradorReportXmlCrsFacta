@@ -108,14 +108,64 @@ class DataPreparationService:
         self._emit_progress(progress_callback, "Preparando dados: controladores", 0, len(working), "")
         issues.extend(self._prepare_controlling_persons(working, events, progress_callback))
         if not issues:
-            self._emit_progress(progress_callback, "Preparando dados: contas duplicadas", 0, len(working), "")
-            working = self._remove_lowest_duplicate_account(working, profile, events, progress_callback)
-            self._emit_progress(progress_callback, "Preparando dados: saldos negativos", 0, len(working), "")
-            self._zero_negative_balances(working, profile, events, progress_callback)
-            self._emit_progress(progress_callback, "Preparando dados: FATCA US Tax ID", 0, len(working), "")
-            self._audit_fatca_us_tin(working, profile, events, progress_callback)
+            working = self._finalize_valid_rows(working, profile, events, progress_callback)
         self._emit_progress(progress_callback, "Preparando dados: finalizado", len(working), len(working), "")
         return PreparedData(working, original_rows, events, issues)
+
+    def ignore_issue_rows(
+        self,
+        prepared: PreparedData,
+        profile: MappingProfile,
+        progress_callback: ProgressCallback | None = None,
+    ) -> PreparedData:
+        issue_lines = {issue.excel_row for issue in prepared.issues if issue.level == "erro" and issue.excel_row}
+        remaining_issues = [issue for issue in prepared.issues if not issue.excel_row or issue.excel_row not in issue_lines]
+        if not issue_lines:
+            return prepared
+        source_by_line = self._prepared_by_line(prepared.original_rows)
+        events = list(prepared.events)
+        for line in sorted(issue_lines):
+            source = source_by_line.get(line)
+            details = "; ".join(issue.message for issue in prepared.issues if issue.excel_row == line)
+            if source:
+                events.append(
+                    self._event(
+                        source,
+                        "REMOVIDO",
+                        "ERRO_IGNORADO",
+                        "registro_ignorado",
+                        f"Registro removido da geracao por erro nao corrigivel: {details}",
+                        result="IGNORADO_PELO_USUARIO",
+                        severity="BLOQUEIO",
+                        evidence=f"linha_excel={line}",
+                    )
+                )
+        kept_rows = [row for row in prepared.rows if _excel_row(row) not in issue_lines]
+        self._emit_progress(
+            progress_callback,
+            "Preparando dados: ignorando registros com erro",
+            len(issue_lines),
+            len(issue_lines),
+            f"{len(issue_lines)} registros ignorados",
+        )
+        if not remaining_issues:
+            kept_rows = self._finalize_valid_rows(kept_rows, profile, events, progress_callback)
+        return PreparedData(kept_rows, prepared.original_rows, events, remaining_issues, prepared.processing_id)
+
+    def _finalize_valid_rows(
+        self,
+        working: list[dict[str, Any]],
+        profile: MappingProfile,
+        events: list[AuditEvent],
+        progress_callback: ProgressCallback | None,
+    ) -> list[dict[str, Any]]:
+        self._emit_progress(progress_callback, "Preparando dados: contas duplicadas", 0, len(working), "")
+        working = self._remove_lowest_duplicate_account(working, profile, events, progress_callback)
+        self._emit_progress(progress_callback, "Preparando dados: saldos negativos", 0, len(working), "")
+        self._zero_negative_balances(working, profile, events, progress_callback)
+        self._emit_progress(progress_callback, "Preparando dados: FATCA US Tax ID", 0, len(working), "")
+        self._audit_fatca_us_tin(working, profile, events, progress_callback)
+        return working
 
     def write_audit(
         self,

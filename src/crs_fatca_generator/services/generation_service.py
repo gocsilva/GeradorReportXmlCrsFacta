@@ -37,6 +37,7 @@ class GenerationService:
         profile: MappingProfile,
         excel_path: Path | None = None,
         overwrite: bool = False,
+        ignore_invalid_records: bool = False,
         progress_callback: Callable[[dict[str, Any]], None] | None = None,
     ) -> list[GenerationResult]:
         results: list[GenerationResult] = []
@@ -44,6 +45,9 @@ class GenerationService:
         file_hash = sha256_file(excel_path) if excel_path and excel_path.exists() else ""
         data_service = DataPreparationService()
         prepared = data_service.prepare(rows, profile, progress_callback=progress_callback)
+        if prepared.issues and ignore_invalid_records:
+            logger.info("IGNORE_INVALID_RECORDS requested issues=%s", len(prepared.issues))
+            prepared = data_service.ignore_issue_rows(prepared, profile, progress_callback=progress_callback)
         self._emit_progress(progress_callback, "Preparando dados", "", len(rows), len(rows), "")
         audit_csv, audit_xlsx, audit_json = self._audit_paths(profile, excel_path)
         audit_summary = self._audit_summary(prepared, audit_csv, audit_xlsx, audit_json)

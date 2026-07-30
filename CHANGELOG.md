@@ -18,3 +18,4 @@
 - Adiciona log em tempo real na tela de validacao/geracao, com etapas, contadores, registro atual e ETA.
 - Otimiza auditoria para arquivos grandes: CSV completo, XLSX resumido/amostral e manifesto amostral para evitar travamento visual em "Gerando auditoria".
 - Remove buscas quadraticas na auditoria usando indices por linha e por conta.
+- Permite uma segunda geracao ignorando registros com erro de linha, registrando as remocoes na auditoria como `ERRO_IGNORADO`.

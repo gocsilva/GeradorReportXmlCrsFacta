@@ -68,6 +68,7 @@ class GenerateWorker(QObject):
         excel_path: Path,
         start_row: int | None = None,
         end_row: int | None = None,
+        ignore_invalid_records: bool = False,
     ) -> None:
         super().__init__()
         self.kinds = kinds
@@ -76,6 +77,7 @@ class GenerateWorker(QObject):
         self.excel_path = excel_path
         self.start_row = start_row
         self.end_row = end_row
+        self.ignore_invalid_records = ignore_invalid_records
 
     def run(self) -> None:
         try:
@@ -119,11 +121,12 @@ class GenerateWorker(QObject):
             self._log(f"Leitura concluida. Registros carregados: {len(rows)}")
             self.progress.emit("Iniciando geracao", "", 0, max(len(rows), 1), "Leitura concluida", "calculando")
             logger.info(
-                "TRACE_BUTTON_PIPELINE GenerateWorker.run -> GenerationService.generate kinds=%s rows=%s identifier_prefix=%s use_uuid=%s",
+                "TRACE_BUTTON_PIPELINE GenerateWorker.run -> GenerationService.generate kinds=%s rows=%s identifier_prefix=%s use_uuid=%s ignore_invalid_records=%s",
                 self.kinds,
                 len(rows),
                 self.profile.identifier_config.prefix,
                 self.profile.identifier_config.use_uuid,
+                self.ignore_invalid_records,
             )
             service = GenerationService(default_crs_schema(), default_fatca_schema())
             phase_started_at: dict[tuple[str, str], float] = {}
@@ -155,6 +158,7 @@ class GenerateWorker(QObject):
                     self.profile,
                     self.excel_path,
                     overwrite=True,
+                    ignore_invalid_records=self.ignore_invalid_records,
                     progress_callback=report_generation_progress,
                 )
             )
@@ -416,8 +420,13 @@ class MainWindow(QMainWindow):
         generate.clicked.connect(self.generate_xml)
         open_folder = QPushButton("Abrir pasta de saída")
         open_folder.clicked.connect(self.open_output_folder)
+        self.ignore_errors_button = QPushButton("Gerar ignorando registros com erro")
+        self.ignore_errors_button.setObjectName("ignore_errors_button")
+        self.ignore_errors_button.setVisible(False)
+        self.ignore_errors_button.clicked.connect(self.generate_ignoring_errors)
         actions.addWidget(preview)
         actions.addWidget(generate)
+        actions.addWidget(self.ignore_errors_button)
         actions.addWidget(open_folder)
         layout.addLayout(actions)
         self.progress = QProgressBar()
@@ -616,8 +625,8 @@ class MainWindow(QMainWindow):
         except Exception as exc:
             QMessageBox.warning(self, "Pré-visualização", f"Não foi possível pré-visualizar:\n{exc}")
 
-    def generate_xml(self) -> None:
-        logger.info("TRACE_BUTTON_PIPELINE MainWindow.generate_xml")
+    def generate_xml(self, ignore_invalid_records: bool = False) -> None:
+        logger.info("TRACE_BUTTON_PIPELINE MainWindow.generate_xml ignore_invalid_records=%s", ignore_invalid_records)
         if not self.kinds():
             QMessageBox.warning(self, "Geração", "Selecione CRS, FATCA ou ambos.")
             return
@@ -629,9 +638,13 @@ class MainWindow(QMainWindow):
             return
         self.progress.setRange(0, 0)
         self.error_table.setRowCount(0)
+        self.ignore_errors_button.setVisible(False)
         self._log_lines = []
         self.log_text.clear()
-        self._append_log("Inicio da execucao pelo botao da interface.")
+        if ignore_invalid_records:
+            self._append_log("Inicio da execucao ignorando registros com erro.")
+        else:
+            self._append_log("Inicio da execucao pelo botao da interface.")
         self.result_text.setPlainText("Lendo Excel e processando em segundo plano...")
         self._start_progress_status("Lendo Excel e processando em segundo plano...")
         profile = self._table_to_profile()
@@ -643,6 +656,7 @@ class MainWindow(QMainWindow):
             self.excel_path or Path(""),
             self.start_row_spin.value() or None,
             self.end_row_spin.value() or None,
+            ignore_invalid_records,
         )
         self.worker.moveToThread(self.thread)
         self.thread.started.connect(self.worker.run)
@@ -688,6 +702,14 @@ class MainWindow(QMainWindow):
             lines.append(f"{result.kind.upper()}: {'válido' if result.valid else 'inválido'} - {result.xml_path}")
             lines.append(json.dumps(result.summary, ensure_ascii=False, indent=2))
             issues.extend(result.issues)
+        can_ignore = any(issue.level == "erro" and issue.excel_row for issue in issues)
+        if can_ignore and not any(result.valid for result in results):
+            lines.append("")
+            lines.append("Foram encontrados erros em linhas especificas. Voce pode gerar novamente ignorando esses registros com erro.")
+            self.ignore_errors_button.setVisible(True)
+            self._append_log("Erros de linha detectados. Botao para ignorar registros com erro liberado.")
+        else:
+            self.ignore_errors_button.setVisible(False)
         self.result_text.setPlainText("\n".join(lines))
         self.error_table.setRowCount(len(issues))
         for row, issue in enumerate(issues):
@@ -696,10 +718,22 @@ class MainWindow(QMainWindow):
 
     def on_failed(self, message: str) -> None:
         self._stop_progress_status()
+        self.ignore_errors_button.setVisible(False)
         self._append_log(f"Erro: {message}")
         self.progress.setRange(0, 100)
         self.progress.setValue(0)
         QMessageBox.critical(self, "Erro", f"Falha técnica:\n{message}\n\nLog: {logs_dir() / 'app.log'}")
+
+    def generate_ignoring_errors(self) -> None:
+        answer = QMessageBox.question(
+            self,
+            "Ignorar registros com erro",
+            "Gerar os XMLs removendo os registros que aparecem com erro na tabela?\n\nEssas linhas ficarao registradas na auditoria como ignoradas.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if answer == QMessageBox.StandardButton.Yes:
+            self.generate_xml(ignore_invalid_records=True)
 
     def _start_progress_status(self, initial_text: str) -> None:
         now = monotonic()
