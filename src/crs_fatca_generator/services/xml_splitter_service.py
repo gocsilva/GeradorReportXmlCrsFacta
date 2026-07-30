@@ -10,13 +10,13 @@ from lxml import etree
 from crs_fatca_generator.models.domain import AccountReport, MessageSpec, TaxReport
 from crs_fatca_generator.services.crs_generator import CrsGenerator
 from crs_fatca_generator.services.fatca_generator import FatcaGenerator
-from crs_fatca_generator.services.xml_helpers import atomic_write
+from crs_fatca_generator.services.xml_helpers import CRS_NS, FATCA_NS, atomic_write, q
 
 
 ProgressCallback = Callable[[int, int, str], None]
 DITC_CRS_MAX_MB = 150
-SPLIT_SIZE_SAMPLE_ACCOUNTS = 128
 SPLIT_HEADER_SAFETY_BYTES = 4 * 1024
+ACCOUNT_PROGRESS_INTERVAL = 1_000
 
 
 class XmlSplitterService:
@@ -119,11 +119,12 @@ class XmlSplitterService:
         planned: list[tuple[str, list[AccountReport], etree._ElementTree | None]] = []
         country_groups = _accounts_by_receiving_country(kind, report)
         for country, accounts in country_groups:
-            planned.extend(self._plan_country_parts(report, country, accounts, max_bytes, pretty_print, generator, write_progress_callback))
+            planned.extend(self._plan_country_parts(kind, report, country, accounts, max_bytes, pretty_print, generator, write_progress_callback))
         return planned
 
     def _plan_country_parts(
         self,
+        kind: str,
         report: TaxReport,
         country: str,
         accounts: list[AccountReport],
@@ -133,90 +134,27 @@ class XmlSplitterService:
         write_progress_callback: Callable[[int, int, AccountReport], None] | None = None,
     ) -> list[tuple[str, list[AccountReport], etree._ElementTree | None]]:
         planned: list[tuple[str, list[AccountReport], etree._ElementTree | None]] = []
-        start = 0
+        current: list[AccountReport] = []
+        current_size = self._empty_report_size(report, country, pretty_print, generator)
+        base_size = current_size
         total = len(accounts)
-        if write_progress_callback and accounts:
-            write_progress_callback(1, total, accounts[0])
-        while start < total:
-            chunk_accounts, tree = self._largest_fitting_chunk(report, country, accounts, start, max_bytes, pretty_print, generator)
-            planned.append((country, chunk_accounts, tree))
-            start += len(chunk_accounts)
-            if write_progress_callback and chunk_accounts:
-                write_progress_callback(start, total, chunk_accounts[-1])
+        for index, account in enumerate(accounts, 1):
+            account_size = _account_tree_size(kind, generator, account, pretty_print)
+            if current and current_size + account_size > max_bytes:
+                planned.append((country, current, None))
+                current = []
+                current_size = base_size
+            current.append(account)
+            current_size += account_size
+            if write_progress_callback and (index == 1 or index % ACCOUNT_PROGRESS_INTERVAL == 0 or index == total):
+                write_progress_callback(index, total, account)
+        if current:
+            planned.append((country, current, None))
         return planned
 
-    def _largest_fitting_chunk(
-        self,
-        report: TaxReport,
-        country: str,
-        accounts: list[AccountReport],
-        start: int,
-        max_bytes: int,
-        pretty_print: bool,
-        generator: object,
-    ) -> tuple[list[AccountReport], etree._ElementTree]:
-        remaining = len(accounts) - start
-        good_count = 0
-        good_tree: etree._ElementTree | None = None
-        measured: dict[int, tuple[int, etree._ElementTree]] = {}
-
-        def measure(count: int) -> tuple[int, etree._ElementTree]:
-            count = max(min(count, remaining), 1)
-            if count in measured:
-                return measured[count]
-            part_accounts = accounts[start : start + count]
-            part_report = self._part_report(report, part_accounts, country, 0)
-            tree = generator.build_tree(part_report)  # type: ignore[attr-defined]
-            measured[count] = (_tree_size(tree, pretty_print), tree)
-            return measured[count]
-
-        sample_count = min(SPLIT_SIZE_SAMPLE_ACCOUNTS, remaining)
-        sample_size, sample_tree = measure(sample_count)
-        if sample_size <= max_bytes:
-            estimated_count = int(sample_count * (max_bytes / max(sample_size, 1)) * 0.95)
-            initial_count = min(max(estimated_count, sample_count), remaining)
-        else:
-            initial_count = sample_count
-
-        size, tree = measure(initial_count)
-        if size <= max_bytes:
-            good_count = initial_count
-            good_tree = tree
-            low = initial_count + 1
-            high = remaining
-            probe = initial_count
-            while probe < remaining:
-                probe = min(probe * 2, remaining)
-                size, tree = measure(probe)
-                if size <= max_bytes:
-                    good_count = probe
-                    good_tree = tree
-                    low = probe + 1
-                    if probe == remaining:
-                        break
-                    continue
-                high = probe - 1
-                break
-        else:
-            low = 1
-            high = initial_count - 1
-            if sample_count == 1:
-                good_tree = sample_tree
-
-        while low <= high:
-            middle = (low + high) // 2
-            size, tree = measure(middle)
-            if size <= max_bytes:
-                good_count = middle
-                good_tree = tree
-                low = middle + 1
-            else:
-                high = middle - 1
-
-        if good_count <= 0 or good_tree is None:
-            _size, good_tree = measure(1)
-            good_count = 1
-        return accounts[start : start + good_count], good_tree
+    def _empty_report_size(self, report: TaxReport, country: str, pretty_print: bool, generator: object) -> int:
+        empty_report = self._part_report(report, [], country, 0)
+        return _tree_size(generator.build_tree(empty_report), pretty_print)  # type: ignore[attr-defined]
 
     def _part_report(self, report: TaxReport, accounts: list[AccountReport], country: str, part_index: int) -> TaxReport:
         message = _part_message_spec(report.message_spec, country, part_index)
@@ -276,6 +214,13 @@ def _find_reporting_group(root: etree._Element) -> etree._Element | None:
 
 def _tree_size(tree: etree._ElementTree, pretty_print: bool) -> int:
     return len(etree.tostring(tree, encoding="UTF-8", xml_declaration=True, pretty_print=pretty_print))
+
+
+def _account_tree_size(kind: str, generator: object, account: AccountReport, pretty_print: bool) -> int:
+    ns = CRS_NS if kind == "crs" else FATCA_NS
+    group = etree.Element(q(ns, "ReportingGroup"))
+    generator._account(group, account)  # type: ignore[attr-defined]
+    return len(etree.tostring(group[0], encoding="UTF-8", pretty_print=pretty_print))
 
 
 def _mb_to_bytes(value: int) -> int:

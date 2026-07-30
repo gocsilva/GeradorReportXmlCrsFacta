@@ -42,6 +42,7 @@ from crs_fatca_generator.services.file_hash import sha256_file
 from crs_fatca_generator.services.generation_service import GenerationService
 from crs_fatca_generator.services.mapping_service import MappingService, infer_default_profile, missing_simple_columns, simple_output_paths
 from crs_fatca_generator.services.profile_service import ProfileService
+from crs_fatca_generator.services.xml_sanitizer_service import XmlSanitizerService
 from crs_fatca_generator.services.xml_splitter_service import XmlSplitterService
 from crs_fatca_generator.security.masking import mask_value
 
@@ -238,6 +239,7 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(self._grouping_tab(), "5. Agrupamentos")
         self.tabs.addTab(self._generate_tab(), "6. Validação e geração")
         self.tabs.addTab(self._split_tab(), "7. Dividir XML")
+        self.tabs.addTab(self._sanitize_tab(), "8. Limpar XML")
 
         menu = self.menuBar().addMenu("Arquivo")
         open_profile = QAction("Abrir perfil", self)
@@ -505,6 +507,36 @@ class MainWindow(QMainWindow):
         self.split_result_text = QTextEdit()
         self.split_result_text.setReadOnly(True)
         layout.addWidget(self.split_result_text)
+        return page
+
+    def _sanitize_tab(self) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        form = QFormLayout()
+        self.sanitize_input_edit = QLineEdit()
+        self.sanitize_input_edit.setReadOnly(True)
+        input_btn = QPushButton("Selecionar XML")
+        input_btn.clicked.connect(self.pick_sanitize_input)
+        input_row = QHBoxLayout()
+        input_row.addWidget(self.sanitize_input_edit)
+        input_row.addWidget(input_btn)
+        self.sanitize_output_edit = QLineEdit()
+        output_btn = QPushButton("Escolher XML limpo")
+        output_btn.clicked.connect(self.pick_sanitize_output)
+        output_row = QHBoxLayout()
+        output_row.addWidget(self.sanitize_output_edit)
+        output_row.addWidget(output_btn)
+        form.addRow("XML CRS/FATCA", input_row)
+        form.addRow("Destino XML limpo", output_row)
+        layout.addLayout(form)
+        sanitize_btn = QPushButton("Remover caracteres inválidos")
+        sanitize_btn.clicked.connect(self.sanitize_existing_xml)
+        layout.addWidget(sanitize_btn)
+        self.sanitize_progress = QProgressBar()
+        layout.addWidget(self.sanitize_progress)
+        self.sanitize_result_text = QTextEdit()
+        self.sanitize_result_text.setReadOnly(True)
+        layout.addWidget(self.sanitize_result_text)
         return page
 
     def select_excel(self) -> None:
@@ -906,6 +938,21 @@ class MainWindow(QMainWindow):
         if path:
             self.split_output_edit.setText(path)
 
+    def pick_sanitize_input(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(self, "Selecionar XML CRS/FATCA", neutral_start_dir(), "XML (*.xml)")
+        if not path:
+            return
+        self.sanitize_input_edit.setText(path)
+        if not self.sanitize_output_edit.text().strip():
+            source = Path(path)
+            self.sanitize_output_edit.setText(str(source.with_name(f"{source.stem}_limpo{source.suffix or '.xml'}")))
+
+    def pick_sanitize_output(self) -> None:
+        initial = self.sanitize_output_edit.text().strip() or neutral_start_dir()
+        path, _ = QFileDialog.getSaveFileName(self, "Salvar XML limpo", initial, "XML (*.xml)")
+        if path:
+            self.sanitize_output_edit.setText(path)
+
     def split_existing_xml(self) -> None:
         xml_path = Path(self.split_input_edit.text().strip())
         output_dir = Path(self.split_output_edit.text().strip())
@@ -937,6 +984,39 @@ class MainWindow(QMainWindow):
         lines = [f"XML dividido em {len(paths)} arquivo(s):", ""]
         lines.extend(str(path) for path in paths)
         self.split_result_text.setPlainText("\n".join(lines))
+
+    def sanitize_existing_xml(self) -> None:
+        xml_path = Path(self.sanitize_input_edit.text().strip())
+        output_path = Path(self.sanitize_output_edit.text().strip()) if self.sanitize_output_edit.text().strip() else None
+        if not xml_path.exists():
+            QMessageBox.warning(self, "Limpar XML", "Selecione um XML CRS ou FATCA existente.")
+            return
+        self.sanitize_progress.setRange(0, 0)
+        self.sanitize_result_text.setPlainText("Removendo caracteres invalidos...")
+        QApplication.processEvents()
+        try:
+            result = XmlSanitizerService().sanitize_file(xml_path, output_path)
+        except Exception as exc:
+            self.sanitize_progress.setRange(0, 100)
+            self.sanitize_progress.setValue(0)
+            QMessageBox.critical(self, "Limpar XML", f"Nao foi possivel limpar o XML:\n{exc}")
+            return
+        self.sanitize_progress.setRange(0, 1)
+        self.sanitize_progress.setValue(1)
+        self.sanitize_result_text.setPlainText(
+            "\n".join(
+                [
+                    "XML limpo gerado com sucesso.",
+                    "",
+                    f"Origem: {result.input_path}",
+                    f"Destino: {result.output_path}",
+                    f"Textos alterados: {result.text_nodes_changed}",
+                    f"Atributos alterados: {result.attributes_changed}",
+                    f"Caracteres XML 1.0 invalidos removidos: {result.invalid_chars_removed}",
+                    f"Parser de recuperacao usado: {'sim' if result.used_recovery_parser else 'nao'}",
+                ]
+            )
+        )
 
     def clear_history(self) -> None:
         from crs_fatca_generator.infrastructure.database import IdentifierStore

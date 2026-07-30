@@ -36,3 +36,6 @@
 - Reaproveita conexao SQLite e grava identificadores em lote para acelerar geracao de muitos `DocRefId`.
 - Adiciona opcao de FATCA nulo (`NilReport`) pela interface, gerando arquivo sem `AccountReport` e mantendo os dados da instituicao financeira.
 - Remove caracteres bloqueados pelo portal DITC em textos do XML (`&`, `<`, `--`, `/*`, `&#`) antes da serializacao CRS/FATCA.
+- Amplia a limpeza para remover caracteres invalidos/desencorajados do XML 1.0 e atributos antes de serializar CRS/FATCA.
+- Otimiza a divisao por MB removendo medicoes repetidas de XMLs grandes; o planejamento agora e linear por `AccountReport`.
+- Adiciona aba para limpar XML CRS/FATCA ja gerado e salvar uma copia sem caracteres invalidos/bloqueados pelo portal.

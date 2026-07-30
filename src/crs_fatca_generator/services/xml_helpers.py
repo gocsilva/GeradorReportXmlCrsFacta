@@ -22,11 +22,11 @@ FATCA_SFA_NS = "urn:oecd:ties:stffatcatypes:v2"
 FATCA_STF_NS = "urn:oecd:ties:stf:v4"
 FATCA_ISO_NS = "urn:oecd:ties:isofatcatypes:v1"
 PORTAL_PROHIBITED_TEXT_PATTERNS = (
+    ("&#", ""),
     ("&", " e "),
     ("<", " "),
     ("--", "-"),
     ("/*", "/"),
-    ("&#", ""),
 )
 
 
@@ -35,17 +35,46 @@ def q(ns: str, tag: str) -> str:
 
 
 def add(parent: etree._Element, ns: str, tag: str, text: object = "", attrib: dict[str, str] | None = None) -> etree._Element:
-    elem = etree.SubElement(parent, q(ns, tag), attrib=attrib or {})
+    clean_attrib = {key: sanitize_xml_text(value) for key, value in (attrib or {}).items()}
+    elem = etree.SubElement(parent, q(ns, tag), attrib=clean_attrib)
     if text not in (None, ""):
         elem.text = sanitize_xml_text(text)
     return elem
 
 
 def sanitize_xml_text(value: object) -> str:
-    text = remove_control_chars(str(value))
+    text = strip_invalid_xml_chars(str(value))
     for pattern, replacement in PORTAL_PROHIBITED_TEXT_PATTERNS:
         text = text.replace(pattern, replacement)
     return re.sub(r"\s+", " ", text).strip()
+
+
+def strip_invalid_xml_chars(value: str) -> str:
+    return "".join(
+        char
+        for char in remove_control_chars(str(value))
+        if _is_valid_xml_10_char(char) and not _is_discouraged_xml_10_char(char)
+    )
+
+
+def _is_valid_xml_10_char(char: str) -> bool:
+    codepoint = ord(char)
+    return (
+        codepoint in {0x09, 0x0A, 0x0D}
+        or 0x20 <= codepoint <= 0xD7FF
+        or 0xE000 <= codepoint <= 0xFFFD
+        or 0x10000 <= codepoint <= 0x10FFFF
+    )
+
+
+def _is_discouraged_xml_10_char(char: str) -> bool:
+    codepoint = ord(char)
+    return (
+        0x7F <= codepoint <= 0x84
+        or 0x86 <= codepoint <= 0x9F
+        or 0xFDD0 <= codepoint <= 0xFDEF
+        or (codepoint & 0xFFFF) in {0xFFFE, 0xFFFF}
+    )
 
 
 def atomic_write(tree: etree._ElementTree, output_path: Path, pretty_print: bool = True) -> None:

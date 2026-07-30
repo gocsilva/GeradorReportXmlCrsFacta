@@ -15,6 +15,7 @@ from crs_fatca_generator.app import generate_from_excel
 from crs_fatca_generator.infrastructure import paths as path_config
 from crs_fatca_generator.infrastructure.paths import default_crs_schema, default_fatca_schema
 from crs_fatca_generator.models.mapping import MappingRule
+from crs_fatca_generator.services.crs_generator import CrsGenerator
 from crs_fatca_generator.services.excel_reader import ExcelReader
 from crs_fatca_generator.services.generation_service import GenerationService
 from crs_fatca_generator.services.mapping_service import MappingService, infer_default_profile, missing_simple_columns, simple_output_paths
@@ -133,6 +134,33 @@ def test_geracao_crs_respeita_limite_de_tamanho_sem_quebrar_account_report(tmp_p
     assert not (tmp_path / "crs_limitado.xml").exists()
     assert sum(int(etree.parse(str(path)).xpath("count(.//*[local-name()='AccountReport'])")) for path in paths) == 3
     assert all(XmlValidator().validate_file(path, default_crs_schema(), "crs") == [] for path in paths)
+
+
+def test_split_por_tamanho_nao_monta_arvore_repetidamente(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = 0
+    original_build_tree = CrsGenerator.build_tree
+
+    def counted_build_tree(self: CrsGenerator, *args: object, **kwargs: object) -> object:
+        nonlocal calls
+        calls += 1
+        return original_build_tree(self, *args, **kwargs)
+
+    monkeypatch.setattr(CrsGenerator, "build_tree", counted_build_tree)
+    monkeypatch.setattr(splitter_module, "_mb_to_bytes", lambda _value: 1800)
+    profile = infer_default_profile(["DocumentoCliente", "Tipo de documento", "NumConta", "NomeCliente", "SaldoTotal", "Endereco", "Cidade", "Pais"])
+    profile.output.crs_path = str(tmp_path / "crs_limitado.xml")
+    profile.output.crs_size_limit_mb = 1
+    rows = [
+        {"DocumentoCliente": "06360698501", "Tipo de documento": "PF", "NumConta": "ACC-1", "NomeCliente": "Cliente Um", "SaldoTotal": "10", "Endereco": "Rua A", "Cidade": "Sao Paulo", "Pais": "BR", "_excel_row": 2},
+        {"DocumentoCliente": "09030562595", "Tipo de documento": "PF", "NumConta": "ACC-2", "NomeCliente": "Cliente Dois", "SaldoTotal": "20", "Endereco": "Rua B", "Cidade": "Rio", "Pais": "BR", "_excel_row": 3},
+        {"DocumentoCliente": "16011329721", "Tipo de documento": "PF", "NumConta": "ACC-3", "NomeCliente": "Cliente Tres", "SaldoTotal": "30", "Endereco": "Rua C", "Cidade": "Curitiba", "Pais": "BR", "_excel_row": 4},
+    ]
+
+    result = GenerationService(default_crs_schema(), default_fatca_schema()).generate(["crs"], rows, profile, Path("entrada.xlsx"), overwrite=True)[0]
+    paths = [Path(item.strip()) for item in result.xml_path.split(";")]
+
+    assert result.valid is True
+    assert calls <= len(paths) + 1
 
 
 def test_divide_xml_existente_por_account_report(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
