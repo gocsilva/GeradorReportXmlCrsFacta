@@ -35,3 +35,4 @@
 - Pula auditoria de US Tax ID para linhas com `USPerson` falso, pois elas nao entram no FATCA.
 - Reaproveita conexao SQLite e grava identificadores em lote para acelerar geracao de muitos `DocRefId`.
 - Adiciona opcao de FATCA nulo (`NilReport`) pela interface, gerando arquivo sem `AccountReport` e mantendo os dados da instituicao financeira.
+- Remove caracteres bloqueados pelo portal DITC em textos do XML (`&`, `<`, `--`, `/*`, `&#`) antes da serializacao CRS/FATCA.
