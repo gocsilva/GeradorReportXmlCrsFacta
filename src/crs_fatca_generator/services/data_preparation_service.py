@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import json
+import logging
 import os
 import platform
 from uuid import uuid4
@@ -9,9 +10,10 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import openpyxl
+from openpyxl.utils import get_column_letter
 
 from crs_fatca_generator.models.domain import ValidationIssue
 from crs_fatca_generator.models.mapping import MappingProfile
@@ -25,6 +27,12 @@ from crs_fatca_generator.services.transformation_service import is_empty, normal
 
 
 CLOSED_CC_STATUS = {"encerrada", "encerrada bacen"}
+PREPARATION_PROGRESS_INTERVAL = 1000
+AUDIT_FULL_XLSX_ROW_LIMIT = 50_000
+AUDIT_XLSX_SAMPLE_LIMIT = 500
+
+ProgressCallback = Callable[[dict[str, Any]], None]
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -79,21 +87,34 @@ class PreparedData:
 
 
 class DataPreparationService:
-    def prepare(self, rows: list[dict[str, Any]], profile: MappingProfile) -> PreparedData:
+    def prepare(
+        self,
+        rows: list[dict[str, Any]],
+        profile: MappingProfile,
+        progress_callback: ProgressCallback | None = None,
+    ) -> PreparedData:
         working = [dict(row) for row in rows]
         original_rows = [dict(row) for row in rows]
         events: list[AuditEvent] = []
         period_start = _reporting_start(profile)
         period_year = period_start.year
 
-        working = self._remove_closed_before_period(working, events, period_start)
-        working = self._remove_cc_closed_during_period(working, events, period_year)
-        issues = self._normalize_documents(working, profile, events)
-        issues.extend(self._prepare_controlling_persons(working, events))
+        self._emit_progress(progress_callback, "Preparando dados: regras de encerramento CI", 0, len(working), "")
+        working = self._remove_closed_before_period(working, events, period_start, progress_callback)
+        self._emit_progress(progress_callback, "Preparando dados: regras de encerramento CC", 0, len(working), "")
+        working = self._remove_cc_closed_during_period(working, events, period_year, progress_callback)
+        self._emit_progress(progress_callback, "Preparando dados: documentos", 0, len(working), "")
+        issues = self._normalize_documents(working, profile, events, progress_callback)
+        self._emit_progress(progress_callback, "Preparando dados: controladores", 0, len(working), "")
+        issues.extend(self._prepare_controlling_persons(working, events, progress_callback))
         if not issues:
-            working = self._remove_lowest_duplicate_account(working, profile, events)
-            self._zero_negative_balances(working, profile, events)
-            self._audit_fatca_us_tin(working, profile, events)
+            self._emit_progress(progress_callback, "Preparando dados: contas duplicadas", 0, len(working), "")
+            working = self._remove_lowest_duplicate_account(working, profile, events, progress_callback)
+            self._emit_progress(progress_callback, "Preparando dados: saldos negativos", 0, len(working), "")
+            self._zero_negative_balances(working, profile, events, progress_callback)
+            self._emit_progress(progress_callback, "Preparando dados: FATCA US Tax ID", 0, len(working), "")
+            self._audit_fatca_us_tin(working, profile, events, progress_callback)
+        self._emit_progress(progress_callback, "Preparando dados: finalizado", len(working), len(working), "")
         return PreparedData(working, original_rows, events, issues)
 
     def write_audit(
@@ -106,6 +127,7 @@ class DataPreparationService:
         file_hash: str = "",
         results: list[Any] | None = None,
         reports: dict[str, Any] | None = None,
+        progress_callback: ProgressCallback | None = None,
     ) -> tuple[Path, Path, Path]:
         output_dir.mkdir(parents=True, exist_ok=True)
         csv_path = output_dir / f"{stem}_relatorio_auditoria.csv"
@@ -115,61 +137,177 @@ class DataPreparationService:
         results = results or []
         rows = self._csv_rows(prepared, results, reports)
         headers = list(rows[0].keys())
+        self._emit_progress(progress_callback, "Gerando auditoria: CSV completo", 0, len(rows), csv_path.name)
         with csv_path.open("w", encoding="utf-8-sig", newline="") as handle:
             writer = csv.DictWriter(handle, fieldnames=headers, delimiter=";")
             writer.writeheader()
-            writer.writerows(rows)
+            for index, row in enumerate(rows, 1):
+                writer.writerow(row)
+                self._emit_progress(progress_callback, "Gerando auditoria: CSV completo", index, len(rows), f"CSV linha {index}", force=index == len(rows))
         workbook = openpyxl.Workbook()
-        self._replace_sheet(workbook, "Resumo", self._summary_rows(prepared, profile, excel_path, file_hash, results, reports))
-        self._replace_sheet(workbook, "Entrada", self._input_rows(prepared))
-        self._replace_sheet(workbook, "Decisoes", self._decision_rows(prepared))
-        self._replace_sheet(workbook, "Avaliacao_Regras", self._rule_evaluation_rows(prepared))
-        self._replace_sheet(workbook, "Exclusoes", self._exclusion_rows(prepared))
-        self._replace_sheet(workbook, "Transformacoes", self._transformation_rows(prepared))
-        self._replace_sheet(workbook, "CRS", self._report_rows(reports.get("crs"), "crs"))
-        self._replace_sheet(workbook, "FATCA", self._report_rows(reports.get("fatca"), "fatca"))
-        self._replace_sheet(workbook, "ControllingPersons", self._controlling_person_rows(prepared, reports))
-        self._replace_sheet(workbook, "Identificadores", self._identifier_rows(reports))
-        self._replace_sheet(workbook, "Validacao_XSD", self._xsd_rows(results))
-        self._replace_sheet(workbook, "Conciliacao", self._conciliation_rows(prepared, reports))
-        self._replace_sheet(workbook, "Conciliacao_Controladores", self._controlling_conciliation_rows(prepared, reports))
-        self._replace_sheet(workbook, "Pendencias", self._pending_rows(prepared))
-        self._replace_sheet(workbook, "Hashes", self._hash_rows(prepared, excel_path, file_hash, results, csv_path, xlsx_path, json_path))
-        self._replace_sheet(workbook, "Auditoria", [event.as_row() for event in prepared.events] + self._issue_rows(prepared.issues))
-        self._replace_sheet(workbook, "Pendencias US Tax ID", [self._fatca_pending_row(event) for event in prepared.events if event.event_type == "PENDENCIA_US_TAX_ID"])
+        compact_audit = self._use_compact_xlsx(prepared)
+        if compact_audit:
+            self._write_compact_xlsx(workbook, prepared, profile, excel_path, file_hash, results, reports, csv_path, xlsx_path, json_path, progress_callback)
+        else:
+            self._replace_sheet(workbook, "Resumo", self._summary_rows(prepared, profile, excel_path, file_hash, results, reports), progress_callback)
+            self._replace_sheet(workbook, "Entrada", self._input_rows(prepared), progress_callback)
+            self._replace_sheet(workbook, "Decisoes", self._decision_rows(prepared), progress_callback)
+            self._replace_sheet(workbook, "Avaliacao_Regras", self._rule_evaluation_rows(prepared), progress_callback)
+            self._replace_sheet(workbook, "Exclusoes", self._exclusion_rows(prepared), progress_callback)
+            self._replace_sheet(workbook, "Transformacoes", self._transformation_rows(prepared), progress_callback)
+            self._replace_sheet(workbook, "CRS", self._report_rows(reports.get("crs"), "crs"), progress_callback)
+            self._replace_sheet(workbook, "FATCA", self._report_rows(reports.get("fatca"), "fatca"), progress_callback)
+            self._replace_sheet(workbook, "ControllingPersons", self._controlling_person_rows(prepared, reports), progress_callback)
+            self._replace_sheet(workbook, "Identificadores", self._identifier_rows(reports), progress_callback)
+            self._replace_sheet(workbook, "Validacao_XSD", self._xsd_rows(results), progress_callback)
+            self._replace_sheet(workbook, "Conciliacao", self._conciliation_rows(prepared, reports), progress_callback)
+            self._replace_sheet(workbook, "Conciliacao_Controladores", self._controlling_conciliation_rows(prepared, reports), progress_callback)
+            self._replace_sheet(workbook, "Pendencias", self._pending_rows(prepared), progress_callback)
+            self._replace_sheet(workbook, "Hashes", self._hash_rows(prepared, excel_path, file_hash, results, csv_path, xlsx_path, json_path), progress_callback)
+            self._replace_sheet(workbook, "Auditoria", [event.as_row() for event in prepared.events] + self._issue_rows(prepared.issues), progress_callback)
+            self._replace_sheet(workbook, "Pendencias US Tax ID", [self._fatca_pending_row(event) for event in prepared.events if event.event_type == "PENDENCIA_US_TAX_ID"], progress_callback)
+        self._emit_progress(progress_callback, "Gerando auditoria: salvando XLSX", 0, 1, xlsx_path.name)
         workbook.save(xlsx_path)
-        manifest = self._manifest(prepared, profile, excel_path, file_hash, results, reports)
+        self._emit_progress(progress_callback, "Gerando auditoria: salvando XLSX", 1, 1, xlsx_path.name)
+        manifest = self._manifest(prepared, profile, excel_path, file_hash, results, reports, compact=compact_audit)
+        if compact_audit:
+            manifest["audit_xlsx_mode"] = "resumido"
+            manifest["audit_xlsx_reason"] = f"Arquivo grande: XLSX detalhado desativado acima de {AUDIT_FULL_XLSX_ROW_LIMIT} registros/eventos. CSV contem a auditoria completa."
+        self._emit_progress(progress_callback, "Gerando auditoria: manifesto", 0, 1, json_path.name)
         json_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+        self._emit_progress(progress_callback, "Gerando auditoria: manifesto", 1, 1, json_path.name)
         return csv_path, xlsx_path, json_path
 
-    def _remove_closed_before_period(self, rows: list[dict[str, Any]], events: list[AuditEvent], period_start: date) -> list[dict[str, Any]]:
+    def _use_compact_xlsx(self, prepared: PreparedData) -> bool:
+        return max(len(prepared.original_rows), len(prepared.rows), len(prepared.events)) > AUDIT_FULL_XLSX_ROW_LIMIT
+
+    def _write_compact_xlsx(
+        self,
+        workbook: openpyxl.Workbook,
+        prepared: PreparedData,
+        profile: MappingProfile | None,
+        excel_path: Path | None,
+        file_hash: str,
+        results: list[Any],
+        reports: dict[str, Any],
+        csv_path: Path,
+        xlsx_path: Path,
+        json_path: Path,
+        progress_callback: ProgressCallback | None,
+    ) -> None:
+        logger.info(
+            "AUDIT_COMPACT_XLSX rows_original=%s rows_prepared=%s events=%s csv=%s",
+            len(prepared.original_rows),
+            len(prepared.rows),
+            len(prepared.events),
+            csv_path,
+        )
+        sample = self._sample_prepared(prepared, AUDIT_XLSX_SAMPLE_LIMIT)
+        summary = self._summary_rows(prepared, profile, excel_path, file_hash, results, reports)
+        self._replace_sheet(workbook, "Resumo", summary, progress_callback)
+        self._replace_sheet(
+            workbook,
+            "Modo_XLSX",
+            [
+                {
+                    "modo": "resumido",
+                    "limite_xlsx_completo": AUDIT_FULL_XLSX_ROW_LIMIT,
+                    "limite_amostra": AUDIT_XLSX_SAMPLE_LIMIT,
+                    "registros_recebidos": len(prepared.original_rows),
+                    "registros_preparados": len(prepared.rows),
+                    "eventos_auditoria": len(prepared.events),
+                    "observacao": f"Auditoria completa linha a linha disponivel no CSV: {csv_path}",
+                }
+            ],
+            progress_callback,
+        )
+        self._replace_sheet(
+            workbook,
+            "Arquivos",
+            [
+                {"tipo": "CSV completo", "caminho": str(csv_path), "observacao": "Auditoria completa linha a linha."},
+                {"tipo": "XLSX resumido", "caminho": str(xlsx_path), "observacao": f"Amostras limitadas a {AUDIT_XLSX_SAMPLE_LIMIT} linhas por aba."},
+                {"tipo": "Manifesto JSON", "caminho": str(json_path), "observacao": "Resumo tecnico e hashes."},
+            ],
+            progress_callback,
+        )
+        self._replace_sheet(workbook, "Entrada_Amostra", self._input_rows(sample), progress_callback)
+        self._replace_sheet(workbook, "Decisoes_Amostra", self._decision_rows(sample), progress_callback)
+        self._replace_sheet(workbook, "Auditoria_Amostra", [event.as_row() for event in sample.events] + self._issue_rows(sample.issues), progress_callback)
+        self._replace_sheet(workbook, "Identificadores_Resumo", self._identifier_summary_rows(reports), progress_callback)
+        self._replace_sheet(workbook, "Validacao_XSD", self._xsd_rows(results), progress_callback)
+
+    def _sample_prepared(self, prepared: PreparedData, limit: int) -> PreparedData:
+        return PreparedData(
+            rows=prepared.rows[:limit],
+            original_rows=prepared.original_rows[:limit],
+            events=prepared.events[:limit],
+            issues=prepared.issues[:limit],
+            processing_id=prepared.processing_id,
+        )
+
+    def _remove_closed_before_period(
+        self,
+        rows: list[dict[str, Any]],
+        events: list[AuditEvent],
+        period_start: date,
+        progress_callback: ProgressCallback | None = None,
+    ) -> list[dict[str, Any]]:
         kept: list[dict[str, Any]] = []
         has_ci_column = _has_column(rows, "DataHoraEncerramento CI")
-        for row in rows:
-            if not has_ci_column:
-                events.append(self._rule_event(row, "REGRA_01", "NAO_AVALIADA_DADO_AUSENTE", "Coluna ausente: DataHoraEncerramento CI.", "ALERTA", required_data="DataHoraEncerramento CI"))
-                kept.append(row)
-                continue
+        if not has_ci_column:
+            events.append(
+                self._summary_rule_event(
+                    "REGRA_01",
+                    "NAO_AVALIADA_DADO_AUSENTE",
+                    f"Coluna ausente: DataHoraEncerramento CI. {len(rows)} registros mantidos sem avaliacao individual.",
+                    "ALERTA",
+                    required_data="DataHoraEncerramento CI",
+                    found_data="nao",
+                )
+            )
+            self._emit_progress(progress_callback, "Preparando dados: regras de encerramento CI", len(rows), len(rows), "")
+            return rows
+        total = len(rows)
+        for index, row in enumerate(rows, 1):
             closed_at = _parse_date(row.get("DataHoraEncerramento CI"))
             if closed_at and closed_at < period_start:
                 events.append(self._rule_event(row, "REGRA_01", "APLICADA_COM_EXCLUSAO", f"Encerramento CI em {closed_at.isoformat()} antes de {period_start.isoformat()}.", "BLOQUEIO", original_value=normalize_text(row.get("DataHoraEncerramento CI")), final_value=closed_at.isoformat(), evidence=f"{closed_at.isoformat()} < {period_start.isoformat()}", required_data="DataHoraEncerramento CI", found_data="sim"))
                 events.append(self._event(row, "REMOVIDO", "REGRA_01", "conta_removida", f"Encerramento CI em {closed_at.isoformat()} antes de {period_start.isoformat()}."))
+                self._emit_progress(progress_callback, "Preparando dados: regras de encerramento CI", index, total, self._row_label(row), force=index == total)
                 continue
             result = "AVALIADA_NAO_APLICAVEL"
             reason = "Sem encerramento CI anterior ao inicio do periodo."
             events.append(self._rule_event(row, "REGRA_01", result, reason, "INFO", original_value=normalize_text(row.get("DataHoraEncerramento CI")), final_value=closed_at.isoformat() if closed_at else "", evidence=f"inicio_periodo={period_start.isoformat()}", required_data="DataHoraEncerramento CI", found_data="sim"))
             kept.append(row)
+            self._emit_progress(progress_callback, "Preparando dados: regras de encerramento CI", index, total, self._row_label(row), force=index == total)
         return kept
 
-    def _remove_cc_closed_during_period(self, rows: list[dict[str, Any]], events: list[AuditEvent], period_year: int) -> list[dict[str, Any]]:
+    def _remove_cc_closed_during_period(
+        self,
+        rows: list[dict[str, Any]],
+        events: list[AuditEvent],
+        period_year: int,
+        progress_callback: ProgressCallback | None = None,
+    ) -> list[dict[str, Any]]:
         kept: list[dict[str, Any]] = []
         has_required = _has_column(rows, "DataHoraEncerramento CI") and _has_column(rows, "Encerramento CC") and _has_column(rows, "Status em 31/12 em CC")
-        for row in rows:
-            if not has_required:
-                missing = [name for name in ("DataHoraEncerramento CI", "Encerramento CC", "Status em 31/12 em CC") if name not in row]
-                events.append(self._rule_event(row, "REGRA_03", "NAO_AVALIADA_DADO_AUSENTE", "Colunas ausentes: " + ", ".join(missing), "ALERTA", required_data="DataHoraEncerramento CI;Encerramento CC;Status em 31/12 em CC", found_data="nao"))
-                kept.append(row)
-                continue
+        if not has_required:
+            missing = [name for name in ("DataHoraEncerramento CI", "Encerramento CC", "Status em 31/12 em CC") if not _has_column(rows, name)]
+            events.append(
+                self._summary_rule_event(
+                    "REGRA_03",
+                    "NAO_AVALIADA_DADO_AUSENTE",
+                    "Colunas ausentes: " + ", ".join(missing) + f". {len(rows)} registros mantidos sem avaliacao individual.",
+                    "ALERTA",
+                    required_data="DataHoraEncerramento CI;Encerramento CC;Status em 31/12 em CC",
+                    found_data="nao",
+                )
+            )
+            self._emit_progress(progress_callback, "Preparando dados: regras de encerramento CC", len(rows), len(rows), "")
+            return rows
+        total = len(rows)
+        for index, row in enumerate(rows, 1):
             ci_closed_at = _parse_date(row.get("DataHoraEncerramento CI"))
             cc_closed_at = _parse_date(row.get("Encerramento CC"))
             status = _normalize_status(row.get("Status em 31/12 em CC"))
@@ -177,26 +315,37 @@ class DataPreparationService:
                 detail = f"Status CC {status} em {cc_closed_at.isoformat()} sem encerramento efetivo no CI."
                 events.append(self._rule_event(row, "REGRA_03", "APLICADA_COM_EXCLUSAO", detail, "BLOQUEIO", original_value=normalize_text(row.get("Status em 31/12 em CC")), final_value=status, evidence=f"ano_status={cc_closed_at.year}; ano_periodo={period_year}", required_data="DataHoraEncerramento CI;Encerramento CC;Status em 31/12 em CC", found_data="sim"))
                 events.append(self._event(row, "REMOVIDO", "REGRA_03", "conta_removida", detail))
+                self._emit_progress(progress_callback, "Preparando dados: regras de encerramento CC", index, total, self._row_label(row), force=index == total)
                 continue
             events.append(self._rule_event(row, "REGRA_03", "AVALIADA_NAO_APLICAVEL", "Status CC/CI nao atende criterio de exclusao.", "INFO", original_value=normalize_text(row.get("Status em 31/12 em CC")), final_value=status, evidence=f"ci={ci_closed_at}; cc={cc_closed_at}; ano_periodo={period_year}", required_data="DataHoraEncerramento CI;Encerramento CC;Status em 31/12 em CC", found_data="sim"))
             kept.append(row)
+            self._emit_progress(progress_callback, "Preparando dados: regras de encerramento CC", index, total, self._row_label(row), force=index == total)
         return kept
 
-    def _normalize_documents(self, rows: list[dict[str, Any]], profile: MappingProfile, events: list[AuditEvent]) -> list[ValidationIssue]:
+    def _normalize_documents(
+        self,
+        rows: list[dict[str, Any]],
+        profile: MappingProfile,
+        events: list[AuditEvent],
+        progress_callback: ProgressCallback | None = None,
+    ) -> list[ValidationIssue]:
         document_column = _column_for(profile, "holder.tin", "DocumentoCliente")
         person_column = _column_for(profile, "holder.kind", "Tipo de documento")
         country_column = _column_for(profile, "holder.res_country", "Pais")
         issues: list[ValidationIssue] = []
         if not _has_column(rows, document_column) or not _has_column(rows, person_column):
             return issues
-        for row in rows:
+        total = len(rows)
+        for index, row in enumerate(rows, 1):
             try:
                 classified = classify_tax_identifier(row.get(document_column), row.get(person_column), row.get(country_column, "BR"))
             except ValueError as exc:
                 issues.append(ValidationIssue("erro", "DOCSCI001", str(exc), document_column, _excel_row(row), "Corrija o documento no Excel e reexecute."))
+                self._emit_progress(progress_callback, "Preparando dados: documentos", index, total, self._row_label(row), force=index == total)
                 continue
             if not classified.valid:
                 issues.append(ValidationIssue("erro", "DOC001", classified.message, document_column, _excel_row(row), "Corrija CPF/CNPJ no Excel."))
+                self._emit_progress(progress_callback, "Preparando dados: documentos", index, total, self._row_label(row), force=index == total)
                 continue
             raw_document = normalize_text(row.get(document_column))
             digits = "".join(char for char in raw_document if char.isdigit())
@@ -226,11 +375,18 @@ class DataPreparationService:
             row["_tipo_documento_brasileiro"] = classified.kind if classified.issued_by == "BR" else ""
             row["_cpf"] = classified.normalized if classified.kind == "CPF" else ""
             row["_cnpj"] = classified.normalized if classified.kind == "CNPJ" else ""
+            self._emit_progress(progress_callback, "Preparando dados: documentos", index, total, self._row_label(row), force=index == total)
         return issues
 
-    def _prepare_controlling_persons(self, rows: list[dict[str, Any]], events: list[AuditEvent]) -> list[ValidationIssue]:
+    def _prepare_controlling_persons(
+        self,
+        rows: list[dict[str, Any]],
+        events: list[AuditEvent],
+        progress_callback: ProgressCallback | None = None,
+    ) -> list[ValidationIssue]:
         issues: list[ValidationIssue] = []
-        for row in rows:
+        total = len(rows)
+        for index, row in enumerate(rows, 1):
             records, record_issues, metrics = extract_controlling_persons(row)
             included = [record for record in records if record.result == "INCLUIDO"]
             row["_controlling_persons"] = included
@@ -258,24 +414,37 @@ class DataPreparationService:
                     )
                 )
             issues.extend(record_issues)
+            self._emit_progress(progress_callback, "Preparando dados: controladores", index, total, self._row_label(row), force=index == total)
         return issues
 
-    def _remove_lowest_duplicate_account(self, rows: list[dict[str, Any]], profile: MappingProfile, events: list[AuditEvent]) -> list[dict[str, Any]]:
+    def _remove_lowest_duplicate_account(
+        self,
+        rows: list[dict[str, Any]],
+        profile: MappingProfile,
+        events: list[AuditEvent],
+        progress_callback: ProgressCallback | None = None,
+    ) -> list[dict[str, Any]]:
         document_column = _column_for(profile, "holder.tin", "DocumentoCliente")
         account_column = _column_for(profile, "account.account_number", "NumConta")
         groups: dict[str, list[dict[str, Any]]] = {}
-        for row in rows:
+        total_rows = len(rows)
+        for index, row in enumerate(rows, 1):
             document = normalize_text(row.get(document_column))
             if document:
                 groups.setdefault(document, []).append(row)
+            self._emit_progress(progress_callback, "Preparando dados: contas duplicadas", index, total_rows, self._row_label(row), force=False)
         remove_ids: set[int] = set()
-        for group_rows in groups.values():
+        single_account_groups = 0
+        total_groups = len(groups)
+        for index, group_rows in enumerate(groups.values(), 1):
             if len(group_rows) <= 1:
                 row = group_rows[0]
-                events.append(self._rule_event(row, "REGRA_02", "AVALIADA_NAO_APLICAVEL", "Documento possui apenas uma conta no agrupamento avaliado.", "INFO", required_data=f"{document_column};{account_column}", found_data="sim", evidence=normalize_text(row.get(account_column))))
+                single_account_groups += 1
+                self._emit_progress(progress_callback, "Preparando dados: contas duplicadas", index, total_groups, self._row_label(row), force=index == total_groups)
                 continue
-            lowest = sorted(group_rows, key=lambda item: _account_sort_key(item.get(account_column)))[0]
-            kept = sorted(group_rows, key=lambda item: _account_sort_key(item.get(account_column)))[-1]
+            sorted_rows = sorted(group_rows, key=lambda item: _account_sort_key(item.get(account_column)))
+            lowest = sorted_rows[0]
+            kept = sorted_rows[-1]
             all_accounts = ",".join(normalize_text(item.get(account_column)) for item in group_rows)
             remove_ids.add(id(lowest))
             for item in group_rows:
@@ -283,13 +452,32 @@ class DataPreparationService:
                 detail = "Mesmo documento com mais de uma conta CI; removida a conta de menor numero." if item is lowest else "Mesmo documento com mais de uma conta CI; conta mantida por nao ser a menor."
                 events.append(self._rule_event(item, "REGRA_02", result, detail, "BLOQUEIO" if item is lowest else "INFO", original_value=all_accounts, final_value=normalize_text(kept.get(account_column)), evidence=f"contas={all_accounts}; removida={normalize_text(lowest.get(account_column))}; mantida={normalize_text(kept.get(account_column))}; criterio=numerico_quando_possivel", required_data=f"{document_column};{account_column}", found_data="sim"))
             events.append(self._event(lowest, "REMOVIDO", "REGRA_02", "conta_removida", "Mesmo documento com mais de uma conta CI; removida a conta de menor numero."))
+            self._emit_progress(progress_callback, "Preparando dados: contas duplicadas", index, total_groups, self._row_label(kept), force=index == total_groups)
+        if single_account_groups:
+            events.append(
+                self._summary_rule_event(
+                    "REGRA_02",
+                    "AVALIADA_NAO_APLICAVEL",
+                    f"{single_account_groups} documentos possuem apenas uma conta no agrupamento avaliado.",
+                    "INFO",
+                    required_data=f"{document_column};{account_column}",
+                    found_data="sim",
+                )
+            )
         return [row for row in rows if id(row) not in remove_ids]
 
-    def _zero_negative_balances(self, rows: list[dict[str, Any]], profile: MappingProfile, events: list[AuditEvent]) -> None:
+    def _zero_negative_balances(
+        self,
+        rows: list[dict[str, Any]],
+        profile: MappingProfile,
+        events: list[AuditEvent],
+        progress_callback: ProgressCallback | None = None,
+    ) -> None:
         balance_column = _column_for(profile, "account.balance", "SaldoTotal")
         if not _has_column(rows, balance_column):
             return
-        for row in rows:
+        total = len(rows)
+        for index, row in enumerate(rows, 1):
             balance = _decimal(row.get(balance_column))
             if balance is not None and balance < 0:
                 events.append(
@@ -310,10 +498,18 @@ class DataPreparationService:
                     )
                 )
                 row[balance_column] = "0.00"
+            self._emit_progress(progress_callback, "Preparando dados: saldos negativos", index, total, self._row_label(row), force=index == total)
 
-    def _audit_fatca_us_tin(self, rows: list[dict[str, Any]], profile: MappingProfile, events: list[AuditEvent]) -> None:
+    def _audit_fatca_us_tin(
+        self,
+        rows: list[dict[str, Any]],
+        profile: MappingProfile,
+        events: list[AuditEvent],
+        progress_callback: ProgressCallback | None = None,
+    ) -> None:
         policy = FatcaMissingTinPolicy()
-        for row in rows:
+        total = len(rows)
+        for index, row in enumerate(rows, 1):
             decision = policy.decide_xml_representation(row, profile)
             row["_fatca_us_tin"] = decision.tins[0].value if decision.tins else ""
             row["_fatca_us_tin_status"] = decision.status
@@ -342,6 +538,41 @@ class DataPreparationService:
                         evidence=decision.reason,
                     )
                 )
+            self._emit_progress(progress_callback, "Preparando dados: FATCA US Tax ID", index, total, self._row_label(row), force=index == total)
+
+    def _emit_progress(
+        self,
+        progress_callback: ProgressCallback | None,
+        phase: str,
+        processed: int,
+        total: int,
+        current_record: str,
+        force: bool = True,
+    ) -> None:
+        if not progress_callback:
+            return
+        if not force and processed not in {0, 1, total} and processed % PREPARATION_PROGRESS_INTERVAL != 0:
+            return
+        logger.info("PROGRESS phase=%s processed=%s total=%s current=%s", phase, processed, total, current_record)
+        progress_callback(
+            {
+                "phase": phase,
+                "kind": "",
+                "processed": processed,
+                "total": total,
+                "current_record": current_record,
+            }
+        )
+
+    def _row_label(self, row: dict[str, Any]) -> str:
+        excel_row = _excel_row(row)
+        account = normalize_text(_row_value(row, "NumConta", "AccountNumber"))
+        document = normalize_text(_row_value(row, "DocumentoCliente", "Identification Number / CPF", "_documento_brasileiro"))
+        if account:
+            return f"linha {excel_row} | conta {account}"
+        if document:
+            return f"linha {excel_row} | documento {document}"
+        return f"linha {excel_row}".strip()
 
     def _event(
         self,
@@ -409,6 +640,27 @@ class DataPreparationService:
             found_data=found_data,
         )
 
+    def _summary_rule_event(
+        self,
+        rule: str,
+        result: str,
+        detail: str,
+        severity: str,
+        required_data: str = "",
+        found_data: str = "",
+    ) -> AuditEvent:
+        return AuditEvent(
+            event_type="AVALIACAO_REGRA",
+            rule=rule,
+            excel_row=None,
+            action="avaliacao_regra",
+            detail=detail,
+            result=result,
+            severity=severity,
+            required_data=required_data,
+            found_data=found_data,
+        )
+
     def _issue_rows(self, issues: list[ValidationIssue]) -> list[dict[str, object]]:
         return [
             {
@@ -442,7 +694,13 @@ class DataPreparationService:
             "data_hora": now,
         }
 
-    def _replace_sheet(self, workbook: openpyxl.Workbook, name: str, rows: list[dict[str, object]]) -> None:
+    def _replace_sheet(
+        self,
+        workbook: openpyxl.Workbook,
+        name: str,
+        rows: list[dict[str, object]],
+        progress_callback: ProgressCallback | None = None,
+    ) -> None:
         if name in workbook.sheetnames:
             del workbook[name]
         sheet = workbook.create_sheet(name)
@@ -452,18 +710,29 @@ class DataPreparationService:
             rows = [{"status": "sem_registros"}]
         headers = list(rows[0].keys())
         sheet.append(headers)
-        for row in rows:
-            sheet.append([row.get(header, "") for header in headers])
-        for column in sheet.columns:
-            width = min(max(len(str(cell.value or "")) for cell in column) + 2, 80)
-            sheet.column_dimensions[column[0].column_letter].width = width
+        widths = [len(str(header)) for header in headers]
+        total = len(rows)
+        self._emit_progress(progress_callback, f"Gerando auditoria: {name}", 0, total, name)
+        for index, row in enumerate(rows, 1):
+            values = [row.get(header, "") for header in headers]
+            sheet.append(values)
+            for column_index, value in enumerate(values):
+                widths[column_index] = min(max(widths[column_index], len(str(value or ""))), 78)
+            self._emit_progress(progress_callback, f"Gerando auditoria: {name}", index, total, f"{name} linha {index}", force=index == total)
+        for column_index, width in enumerate(widths, 1):
+            sheet.column_dimensions[get_column_letter(column_index)].width = min(width + 2, 80)
 
     def _csv_rows(self, prepared: PreparedData, results: list[Any], reports: dict[str, Any]) -> list[dict[str, object]]:
         result_by_kind = {getattr(result, "kind", ""): result for result in results}
         rows: list[dict[str, object]] = []
-        kept_ids = {id(row): row for row in prepared.rows}
+        prepared_by_line = self._prepared_by_line(prepared.rows)
+        events_by_line = self._events_by_line(prepared.events)
+        rule_results = self._rule_results_by_line(prepared.events)
+        account_doc_refs = self._account_doc_refs(reports)
         for index, row in enumerate(prepared.original_rows, 1):
-            normalized = self._matching_prepared_row(row, prepared.rows)
+            line = _excel_row(row)
+            normalized = prepared_by_line.get(line)
+            line_events = events_by_line.get(line, [])
             account = normalize_text(_row_value(row, "NumConta", "AccountNumber"))
             document = normalize_text(_row_value(row, "DocumentoCliente", "Identification Number / CPF"))
             final_balance = _row_value(normalized or row, "SaldoTotal", "Saldo da conta em 31/12/2025")
@@ -481,19 +750,19 @@ class DataPreparationService:
                     "saldo_final": final_balance,
                     "status_CI": _row_value(row, "DataHoraEncerramento CI"),
                     "status_CC": _row_value(row, "Status em 31/12 em CC"),
-                    "REGRA_01 resultado": self._rule_result_for(row, prepared.events, "REGRA_01"),
-                    "REGRA_02 resultado": self._rule_result_for(row, prepared.events, "REGRA_02"),
-                    "REGRA_03 resultado": self._rule_result_for(row, prepared.events, "REGRA_03"),
+                    "REGRA_01 resultado": rule_results.get((line, "REGRA_01"), ""),
+                    "REGRA_02 resultado": rule_results.get((line, "REGRA_02"), ""),
+                    "REGRA_03 resultado": rule_results.get((line, "REGRA_03"), ""),
                     "decisao": decision,
-                    "regra_aplicada": self._rule_for(row, prepared.events),
+                    "regra_aplicada": ";".join(event.rule for event in line_events),
                     "CRS_incluido": "sim" if normalized is not None and "crs" in reports else "nao",
                     "FATCA_incluido": "sim" if normalized is not None and "fatca" in reports else "nao",
-                    "DocRefId": self._account_doc_ref(reports, account),
+                    "DocRefId": account_doc_refs.get(account, ""),
                     "US_TIN_status": _row_value(normalized or row, "_fatca_us_tin_status"),
                     "politica_US_TIN": _row_value(normalized or row, "_fatca_us_tin_policy"),
                     "resultado_XSD": self._xsd_summary(result_by_kind),
-                    "severidade": "BLOQUEIO" if prepared.issues else ("ALERTA" if self._rule_for(row, prepared.events) else "INFO"),
-                    "mensagem": self._message_for(row, prepared.events),
+                    "severidade": "BLOQUEIO" if prepared.issues else ("ALERTA" if line_events else "INFO"),
+                    "mensagem": "; ".join(event.detail for event in line_events),
                 }
             )
         if not rows:
@@ -564,7 +833,9 @@ class DataPreparationService:
 
     def _input_rows(self, prepared: PreparedData) -> list[dict[str, object]]:
         rows: list[dict[str, object]] = []
+        prepared_by_line = self._prepared_by_line(prepared.rows)
         for index, row in enumerate(prepared.original_rows, 1):
+            normalized = prepared_by_line.get(_excel_row(row))
             base = {
                 "numero sequencial": index,
                 "linha da planilha": _excel_row(row) or "",
@@ -572,7 +843,7 @@ class DataPreparationService:
                 "nome": mask_value(_row_value(row, "NomeCliente", "Name")),
                 "tipo PF/PJ": _row_value(row, "Tipo de documento", "DocumentType"),
                 "CPF/CNPJ original": mask_value(_row_value(row, "DocumentoCliente", "Identification Number / CPF")),
-                "CPF/CNPJ normalizado": mask_value(_row_value(self._matching_prepared_row(row, prepared.rows) or row, "_documento_brasileiro", "DocumentoCliente", "Identification Number / CPF")),
+                "CPF/CNPJ normalizado": mask_value(_row_value(normalized or row, "_documento_brasileiro", "DocumentoCliente", "Identification Number / CPF")),
                 "conta": mask_value(_row_value(row, "NumConta", "AccountNumber")),
                 "saldo original": _row_value(row, "SaldoTotal", "Saldo da conta em 31/12/2025"),
                 "moeda original": _row_value(row, "Currency", "Moeda"),
@@ -774,9 +1045,10 @@ class DataPreparationService:
         crs_accounts = {account.account_number: account for account in getattr(reports.get("crs"), "accounts", [])}
         fatca_accounts = {account.account_number: account for account in getattr(reports.get("fatca"), "accounts", [])}
         rows = []
+        prepared_lines = set(self._prepared_by_line(prepared.rows))
         for row in prepared.original_rows:
             account = normalize_text(_row_value(row, "NumConta", "AccountNumber"))
-            expected = self._matching_prepared_row(row, prepared.rows) is not None
+            expected = _excel_row(row) in prepared_lines
             rows.append({"estava na entrada": "sim", "deveria ser incluido": "sim" if expected else "nao", "apareceu no CRS": "sim" if account in crs_accounts else "nao", "apareceu no FATCA": "sim" if account in fatca_accounts else "nao", "quantidade de ocorrencias": int(account in crs_accounts) + int(account in fatca_accounts), "conta correspondente": mask_value(account), "documento correspondente": mask_value(_row_value(row, "DocumentoCliente", "Identification Number / CPF")), "divergencia encontrada": "nao" if (expected == (account in crs_accounts or account in fatca_accounts)) else "sim"})
         return rows
 
@@ -805,7 +1077,17 @@ class DataPreparationService:
             )
         return rows
 
-    def _manifest(self, prepared: PreparedData, profile: MappingProfile | None, excel_path: Path | None, file_hash: str, results: list[Any], reports: dict[str, Any]) -> dict[str, Any]:
+    def _manifest(
+        self,
+        prepared: PreparedData,
+        profile: MappingProfile | None,
+        excel_path: Path | None,
+        file_hash: str,
+        results: list[Any],
+        reports: dict[str, Any],
+        compact: bool = False,
+    ) -> dict[str, Any]:
+        manifest_prepared = self._sample_prepared(prepared, AUDIT_XLSX_SAMPLE_LIMIT) if compact else prepared
         return {
             "processing_id": prepared.processing_id,
             "application_version": "0.1.0",
@@ -819,18 +1101,59 @@ class DataPreparationService:
             "identifier_profile": "DITC_SEQUENCE" if profile and not profile.identifier_config.use_uuid else "INTERNAL_TEST_UUID",
             "us_tin_policy": _profile_fixed(profile, "fatca.missing_us_tin_policy", ""),
             "rules": {"REGRA_01": "encerramento CI antes do periodo", "REGRA_02": "menor conta duplicada", "REGRA_03": "status CC encerrada no periodo", "FATCA_US_TIN": "US TIN separado do CPF/CNPJ"},
-            "rule_evaluations": self._rule_evaluation_rows(prepared),
-            "excluded_records": self._exclusion_rows(prepared),
-            "transformations": self._transformation_rows(prepared),
-            "identifiers": self._identifier_rows(reports),
+            "manifest_detail_mode": "amostra" if compact else "completo",
+            "manifest_sample_limit": AUDIT_XLSX_SAMPLE_LIMIT if compact else "",
+            "rule_evaluations": self._rule_evaluation_rows(manifest_prepared),
+            "excluded_records": self._exclusion_rows(manifest_prepared),
+            "transformations": self._transformation_rows(manifest_prepared),
+            "identifiers": self._identifier_summary_rows(reports) if compact else self._identifier_rows(reports),
             "xsd_validation": self._xsd_rows(results),
-            "reconciliation": self._conciliation_rows(prepared, reports),
-            "controlling_persons": self._controlling_person_rows(prepared, reports),
-            "controlling_person_reconciliation": self._controlling_conciliation_rows(prepared, reports),
-            "pending_decisions": self._pending_rows(prepared),
+            "reconciliation": self._conciliation_rows(manifest_prepared, reports),
+            "controlling_persons": self._controlling_person_rows(manifest_prepared, reports),
+            "controlling_person_reconciliation": self._controlling_conciliation_rows(manifest_prepared, reports),
+            "pending_decisions": self._pending_rows(manifest_prepared),
             "file_hashes": self._hash_rows(prepared, excel_path, file_hash, results, Path(""), Path(""), Path("")),
             "final_status": self._summary_rows(prepared, profile, excel_path, file_hash, results, reports)[0]["conclusao geral"],
         }
+
+    def _prepared_by_line(self, rows: list[dict[str, Any]]) -> dict[int | None, dict[str, Any]]:
+        return {_excel_row(row): row for row in rows}
+
+    def _events_by_line(self, events: list[AuditEvent]) -> dict[int | None, list[AuditEvent]]:
+        indexed: dict[int | None, list[AuditEvent]] = {}
+        for event in events:
+            indexed.setdefault(event.excel_row, []).append(event)
+        return indexed
+
+    def _rule_results_by_line(self, events: list[AuditEvent]) -> dict[tuple[int | None, str], str]:
+        indexed: dict[tuple[int | None, str], str] = {}
+        for event in events:
+            if event.event_type == "AVALIACAO_REGRA":
+                indexed[(event.excel_row, event.rule)] = event.result
+        return indexed
+
+    def _account_doc_refs(self, reports: dict[str, Any]) -> dict[str, str]:
+        refs: dict[str, str] = {}
+        for report in reports.values():
+            for account in getattr(report, "accounts", []):
+                refs[normalize_text(account.account_number)] = account.doc_spec.doc_ref_id
+        return refs
+
+    def _identifier_summary_rows(self, reports: dict[str, Any]) -> list[dict[str, object]]:
+        rows: list[dict[str, object]] = []
+        for kind, report in reports.items():
+            rows.append({"tipo de arquivo": kind, "tipo do identificador": "MessageRefId", "quantidade": 1, "exemplo": report.message_spec.message_ref_id})
+            rows.append({"tipo de arquivo": kind, "tipo do identificador": "ReportingFI DocRefId", "quantidade": 1, "exemplo": report.reporting_fi.doc_spec.doc_ref_id})
+            first_account = next(iter(getattr(report, "accounts", [])), None)
+            rows.append(
+                {
+                    "tipo de arquivo": kind,
+                    "tipo do identificador": "Account DocRefId",
+                    "quantidade": len(getattr(report, "accounts", [])),
+                    "exemplo": first_account.doc_spec.doc_ref_id if first_account else "",
+                }
+            )
+        return rows
 
     def _matching_prepared_row(self, original: dict[str, Any], rows: list[dict[str, Any]]) -> dict[str, Any] | None:
         original_line = _excel_row(original)

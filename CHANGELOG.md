@@ -13,3 +13,8 @@
 - Corrige travamento aparente ao selecionar Excel grande: a interface carrega somente a previa e a leitura completa ocorre em segundo plano ao executar.
 - Adiciona progresso de leitura com registros processados, faltantes, registro/linha atual e previsao de finalizacao.
 - Adiciona progresso detalhado na geracao do XML: etapa atual, XML CRS/FATCA, conta atual, progresso por conta, tempo decorrido e ultima atualizacao.
+- Adiciona progresso interno na preparacao/auditoria e reduz eventos repetidos em arquivos grandes, evitando tela parada em "Preparando dados".
+- Otimiza geracao sequencial de MessageRefId/DocRefId para nao reiniciar a busca de IDs a cada conta.
+- Adiciona log em tempo real na tela de validacao/geracao, com etapas, contadores, registro atual e ETA.
+- Otimiza auditoria para arquivos grandes: CSV completo, XLSX resumido/amostral e manifesto amostral para evitar travamento visual em "Gerando auditoria".
+- Remove buscas quadraticas na auditoria usando indices por linha e por conta.

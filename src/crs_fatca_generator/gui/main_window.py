@@ -58,6 +58,7 @@ class GenerateWorker(QObject):
     finished = Signal(list)
     failed = Signal(str)
     progress = Signal(str, str, int, int, str, str)
+    log = Signal(str)
 
     def __init__(
         self,
@@ -81,6 +82,7 @@ class GenerateWorker(QObject):
             rows = self.rows
             if self.excel_path and self.excel_path.exists() and self.profile.sheet_name:
                 started_at = monotonic()
+                self._log(f"Iniciando leitura do Excel: {self.excel_path.name}")
 
                 def report_read_progress(processed: int, total: int, excel_row: int, row: dict[str, Any]) -> None:
                     elapsed = max(monotonic() - started_at, 0.001)
@@ -94,6 +96,8 @@ class GenerateWorker(QObject):
                         self._record_label(row, excel_row),
                         format_duration(seconds_left),
                     )
+                    if self._should_log_progress(processed, total):
+                        self._log(f"Lendo Excel: {processed}/{total} | linha {excel_row} | ETA {format_duration(seconds_left)}")
 
                 logger.info(
                     "TRACE_BUTTON_PIPELINE GenerateWorker.run -> ExcelReader.read_rows sheet=%s header_row=%s start_row=%s end_row=%s",
@@ -112,6 +116,7 @@ class GenerateWorker(QObject):
                 )
             if not rows:
                 rows = [{"_excel_row": 0}]
+            self._log(f"Leitura concluida. Registros carregados: {len(rows)}")
             self.progress.emit("Iniciando geracao", "", 0, max(len(rows), 1), "Leitura concluida", "calculando")
             logger.info(
                 "TRACE_BUTTON_PIPELINE GenerateWorker.run -> GenerationService.generate kinds=%s rows=%s identifier_prefix=%s use_uuid=%s",
@@ -138,7 +143,11 @@ class GenerateWorker(QObject):
                     eta = format_duration(int((elapsed / processed) * remaining))
                 current_record = self._mask_progress_record(str(event.get("current_record") or ""))
                 self.progress.emit(phase, kind, processed, total, current_record, eta)
+                if self._should_log_progress(processed, total):
+                    target = f" {kind}" if kind else ""
+                    self._log(f"{phase}{target}: {processed}/{total} | atual: {current_record or '-'} | ETA {eta}")
 
+            self._log("Chamando gerador CRS/FATCA.")
             self.finished.emit(
                 service.generate(
                     self.kinds,
@@ -150,7 +159,20 @@ class GenerateWorker(QObject):
                 )
             )
         except Exception as exc:
+            self._log(f"Falha tecnica: {exc}")
             self.failed.emit(str(exc))
+
+    def _log(self, message: str) -> None:
+        logger.info("GUI_PROGRESS %s", message)
+        self.log.emit(message)
+
+    def _should_log_progress(self, processed: int, total: int) -> bool:
+        if total <= 0:
+            return True
+        if processed in {0, 1, total}:
+            return True
+        interval = 1000 if total >= 10_000 else 100
+        return processed % interval == 0
 
     def _record_label(self, row: dict[str, Any], excel_row: int) -> str:
         candidates = [
@@ -195,6 +217,7 @@ class MainWindow(QMainWindow):
         self._progress_started_at: float | None = None
         self._progress_last_at: float | None = None
         self._progress_base_text = ""
+        self._log_lines: list[str] = []
         self.progress_timer = QTimer(self)
         self.progress_timer.setInterval(1000)
         self.progress_timer.timeout.connect(self.refresh_progress_status)
@@ -402,6 +425,11 @@ class MainWindow(QMainWindow):
         self.result_text = QTextEdit()
         self.result_text.setReadOnly(True)
         layout.addWidget(self.result_text)
+        layout.addWidget(QLabel("Log em tempo real"))
+        self.log_text = QTextEdit()
+        self.log_text.setReadOnly(True)
+        self.log_text.setMinimumHeight(130)
+        layout.addWidget(self.log_text)
         self.error_table = QTableWidget()
         self.error_table.setColumnCount(5)
         self.error_table.setHorizontalHeaderLabels(["Nível", "Código", "Campo", "Linha", "Mensagem"])
@@ -601,6 +629,9 @@ class MainWindow(QMainWindow):
             return
         self.progress.setRange(0, 0)
         self.error_table.setRowCount(0)
+        self._log_lines = []
+        self.log_text.clear()
+        self._append_log("Inicio da execucao pelo botao da interface.")
         self.result_text.setPlainText("Lendo Excel e processando em segundo plano...")
         self._start_progress_status("Lendo Excel e processando em segundo plano...")
         profile = self._table_to_profile()
@@ -616,6 +647,7 @@ class MainWindow(QMainWindow):
         self.worker.moveToThread(self.thread)
         self.thread.started.connect(self.worker.run)
         self.worker.progress.connect(self.on_progress)
+        self.worker.log.connect(self._append_log)
         self.worker.finished.connect(self.on_generated)
         self.worker.failed.connect(self.on_failed)
         self.worker.finished.connect(self.thread.quit)
@@ -624,6 +656,9 @@ class MainWindow(QMainWindow):
         self.thread.start()
 
     def on_progress(self, phase: str, xml_kind: str, processed: int, total: int, current_record: str, eta: str) -> None:
+        if self._should_append_progress_log(processed, total):
+            target = f" {xml_kind}" if xml_kind else ""
+            self._append_log(f"{phase}{target}: {processed}/{total if total else '?'} | atual: {current_record or '-'} | ETA {eta}")
         if total > 0:
             self.progress.setRange(0, total)
             self.progress.setValue(min(processed, total))
@@ -644,6 +679,7 @@ class MainWindow(QMainWindow):
 
     def on_generated(self, results: list[Any]) -> None:
         self._stop_progress_status()
+        self._append_log("Geracao finalizada. Montando resumo na tela.")
         self.progress.setRange(0, 100)
         self.progress.setValue(100)
         lines: list[str] = []
@@ -660,6 +696,7 @@ class MainWindow(QMainWindow):
 
     def on_failed(self, message: str) -> None:
         self._stop_progress_status()
+        self._append_log(f"Erro: {message}")
         self.progress.setRange(0, 100)
         self.progress.setValue(0)
         QMessageBox.critical(self, "Erro", f"Falha técnica:\n{message}\n\nLog: {logs_dir() / 'app.log'}")
@@ -675,6 +712,24 @@ class MainWindow(QMainWindow):
         self._progress_base_text = text
         self._progress_last_at = monotonic()
         self.refresh_progress_status()
+
+    def _append_log(self, message: str) -> None:
+        elapsed = ""
+        if self._progress_started_at is not None:
+            elapsed = f"+{format_duration(int(monotonic() - self._progress_started_at))} "
+        self._log_lines.append(f"{elapsed}{message}")
+        if len(self._log_lines) > 500:
+            self._log_lines = self._log_lines[-500:]
+        self.log_text.setPlainText("\n".join(self._log_lines))
+        self.log_text.verticalScrollBar().setValue(self.log_text.verticalScrollBar().maximum())
+
+    def _should_append_progress_log(self, processed: int, total: int) -> bool:
+        if total <= 0:
+            return True
+        if processed in {0, 1, total}:
+            return True
+        interval = 1000 if total >= 10_000 else 100
+        return processed % interval == 0
 
     def refresh_progress_status(self) -> None:
         if self._progress_started_at is None:

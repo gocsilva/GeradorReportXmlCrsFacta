@@ -77,6 +77,7 @@ def simple_output_paths(excel_path: Path) -> OutputConfig:
 class MappingService:
     def __init__(self, identifier_store: IdentifierStore | None = None) -> None:
         self.identifier_store = identifier_store or IdentifierStore()
+        self._sequence_next: dict[str, int] = {}
 
     def build_report(
         self,
@@ -400,9 +401,11 @@ class MappingService:
         if prefix.strip().upper() == "AUTO":
             prefix = DITC_DEFAULT_PREFIX
         if not profile.identifier_config.use_uuid:
-            for sequence in range(1_000_000):
+            start = self._sequence_next.get(kind, 0)
+            for sequence in range(start, 1_000_000):
                 value = self._ditc_sequence_id(kind, prefix, country, sequence)
                 if not self.identifier_store.exists(kind, value):
+                    self._sequence_next[kind] = sequence + 1
                     logger.info("TRACE_BUTTON_PIPELINE MappingService._new_id kind=%s generator=DITC_SEQUENCE value=%s", kind, value)
                     return value
             raise RuntimeError("Nao foi possivel gerar identificador sequencial unico.")

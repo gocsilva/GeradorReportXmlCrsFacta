@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
@@ -16,6 +17,9 @@ from crs_fatca_generator.services.mapping_service import MappingService
 from crs_fatca_generator.services.schema_inspector import SchemaInspector
 from crs_fatca_generator.services.schema_loader import SchemaLoader
 from crs_fatca_generator.services.xml_validator import XmlValidator
+
+
+logger = logging.getLogger(__name__)
 
 
 class GenerationService:
@@ -39,7 +43,7 @@ class GenerationService:
         self._emit_progress(progress_callback, "Preparando dados", "", 0, len(rows), "")
         file_hash = sha256_file(excel_path) if excel_path and excel_path.exists() else ""
         data_service = DataPreparationService()
-        prepared = data_service.prepare(rows, profile)
+        prepared = data_service.prepare(rows, profile, progress_callback=progress_callback)
         self._emit_progress(progress_callback, "Preparando dados", "", len(rows), len(rows), "")
         audit_csv, audit_xlsx, audit_json = self._audit_paths(profile, excel_path)
         audit_summary = self._audit_summary(prepared, audit_csv, audit_xlsx, audit_json)
@@ -48,9 +52,10 @@ class GenerationService:
             for kind in kinds:
                 output_path = self._output_path(kind, profile)
                 results.append(GenerationResult(kind, str(output_path), False, prepared.issues, {**audit_summary, **self._fiscal_summary(kind, profile), "status": "nao gerado"}))
-            self._emit_progress(progress_callback, "Gerando auditoria", "", 0, 1, "")
-            data_service.write_audit(prepared, self._audit_dir(profile), self._audit_stem(profile, excel_path), profile, excel_path, file_hash, results, reports)
-            self._emit_progress(progress_callback, "Gerando auditoria", "", 1, 1, "")
+            audit_total = max(len(prepared.original_rows), 1)
+            self._emit_progress(progress_callback, "Gerando auditoria: iniciando", "", 0, audit_total, "")
+            data_service.write_audit(prepared, self._audit_dir(profile), self._audit_stem(profile, excel_path), profile, excel_path, file_hash, results, reports, progress_callback)
+            self._emit_progress(progress_callback, "Gerando auditoria: finalizada", "", audit_total, audit_total, "")
             return results
         for kind in kinds:
             kind_name = kind.upper()
@@ -102,9 +107,10 @@ class GenerationService:
                     summary={**self._summary(report, "valido" if valid else "invalido"), **audit_summary, **self._fiscal_summary(kind, profile), "schema_hashes": ",".join(bundle.hashes.values())},
                 )
             )
-        self._emit_progress(progress_callback, "Gerando auditoria", "", 0, 1, "")
-        data_service.write_audit(prepared, self._audit_dir(profile), self._audit_stem(profile, excel_path), profile, excel_path, file_hash, results, reports)
-        self._emit_progress(progress_callback, "Gerando auditoria", "", 1, 1, "")
+        audit_total = max(len(prepared.original_rows), 1)
+        self._emit_progress(progress_callback, "Gerando auditoria: iniciando", "", 0, audit_total, "")
+        data_service.write_audit(prepared, self._audit_dir(profile), self._audit_stem(profile, excel_path), profile, excel_path, file_hash, results, reports, progress_callback)
+        self._emit_progress(progress_callback, "Gerando auditoria: finalizada", "", audit_total, audit_total, "")
         return results
 
     def _output_path(self, kind: str, profile: MappingProfile) -> Path:
@@ -191,6 +197,7 @@ class GenerationService:
         total: int,
         current_record: str,
     ) -> None:
+        logger.info("PROGRESS phase=%s kind=%s processed=%s total=%s current=%s", phase, kind, processed, total, current_record)
         if progress_callback:
             progress_callback(
                 {

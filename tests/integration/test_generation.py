@@ -17,12 +17,13 @@ from crs_fatca_generator.infrastructure.paths import default_crs_schema, default
 from crs_fatca_generator.models.mapping import MappingRule
 from crs_fatca_generator.services.excel_reader import ExcelReader
 from crs_fatca_generator.services.generation_service import GenerationService
-from crs_fatca_generator.services.mapping_service import infer_default_profile, missing_simple_columns, simple_output_paths
+from crs_fatca_generator.services.mapping_service import MappingService, infer_default_profile, missing_simple_columns, simple_output_paths
 from crs_fatca_generator.services.schema_inspector import SchemaInspector
 from crs_fatca_generator.services.data_preparation_service import DataPreparationService
 from crs_fatca_generator.services.xml_validator import XmlValidator
 from crs_fatca_generator.services.xml_helpers import CRS_NS
 from crs_fatca_generator.services.controlling_person_service import detect_controlling_person_blocks, extract_controlling_persons
+import crs_fatca_generator.services.data_preparation_service as preparation_module
 
 
 def exemplos_excel_path() -> Path:
@@ -293,6 +294,86 @@ def test_geracao_reporta_progresso_por_xml_e_conta(tmp_path: Path) -> None:
     assert any(event["phase"] == "Escrevendo XML" and event["kind"] == "FATCA" and event["processed"] == 1 for event in events)
     assert any(event["phase"] == "Montando dados" and event["kind"] == "CRS" and "1001" in str(event["current_record"]) for event in events)
     assert any(event["phase"] == "Validando XSD" and event["kind"] == "FATCA" for event in events)
+    assert any(str(event["phase"]).startswith("Preparando dados: documentos") and event["processed"] == 1 for event in events)
+    assert any(str(event["phase"]).startswith("Gerando auditoria: Entrada") for event in events)
+
+
+def test_preparacao_nao_cria_alerta_repetido_por_linha_quando_coluna_ausente() -> None:
+    profile = infer_default_profile(["DocumentoCliente", "Tipo de documento", "NumConta", "SaldoTotal", "Pais"])
+    rows = [
+        {"DocumentoCliente": "06360698501", "Tipo de documento": "PF", "NumConta": f"ACC-{index}", "SaldoTotal": "10", "Pais": "BR", "_excel_row": index}
+        for index in range(2, 102)
+    ]
+    events: list[dict[str, object]] = []
+
+    prepared = DataPreparationService().prepare(rows, profile, progress_callback=events.append)
+
+    rule_01_missing = [
+        event
+        for event in prepared.events
+        if event.rule == "REGRA_01" and event.result == "NAO_AVALIADA_DADO_AUSENTE"
+    ]
+    rule_03_missing = [
+        event
+        for event in prepared.events
+        if event.rule == "REGRA_03" and event.result == "NAO_AVALIADA_DADO_AUSENTE"
+    ]
+    assert len(rule_01_missing) == 1
+    assert len(rule_03_missing) == 1
+    assert any(event["phase"] == "Preparando dados: regras de encerramento CI" and event["processed"] == len(rows) for event in events)
+
+
+def test_identificador_sequencial_nao_reinicia_busca_a_cada_conta() -> None:
+    class MemoryStore:
+        def __init__(self) -> None:
+            self.values: set[tuple[str, str]] = set()
+            self.checks: list[tuple[str, str]] = []
+
+        def exists(self, kind: str, value: str) -> bool:
+            self.checks.append((kind, value))
+            return (kind, value) in self.values
+
+        def add(self, kind: str, value: str, file_hash: str = "") -> None:
+            self.values.add((kind, value))
+
+    store = MemoryStore()
+    profile = infer_default_profile(["DocumentoCliente", "Tipo de documento", "NumConta", "SaldoTotal", "Pais"])
+    service = MappingService(store)  # type: ignore[arg-type]
+
+    first = service._new_id("crs-account-doc", profile, "")  # noqa: SLF001
+    store.add("crs-account-doc", first)
+    checks_after_first = len(store.checks)
+    second = service._new_id("crs-account-doc", profile, "")  # noqa: SLF001
+
+    assert first != second
+    assert len(store.checks) == checks_after_first + 1
+    assert first not in [value for _, value in store.checks[checks_after_first:]]
+
+
+def test_auditoria_grande_usa_xlsx_resumido_e_manifesto_amostral(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(preparation_module, "AUDIT_FULL_XLSX_ROW_LIMIT", 2)
+    profile = infer_default_profile(["DocumentoCliente", "Tipo de documento", "NumConta", "SaldoTotal", "Pais"])
+    rows = [
+        {"DocumentoCliente": "06360698501", "Tipo de documento": "PF", "NumConta": f"ACC-{index}", "SaldoTotal": "10", "Pais": "BR", "_excel_row": index}
+        for index in range(2, 6)
+    ]
+    prepared = DataPreparationService().prepare(rows, profile)
+    service = DataPreparationService()
+
+    csv_path, xlsx_path, json_path = service.write_audit(prepared, tmp_path, "grande", profile=profile)
+
+    assert csv_path.exists()
+    assert xlsx_path.exists()
+    manifest = json.loads(json_path.read_text(encoding="utf-8"))
+    assert manifest["audit_xlsx_mode"] == "resumido"
+    assert manifest["manifest_detail_mode"] == "amostra"
+    workbook = openpyxl.load_workbook(xlsx_path, read_only=True)
+    try:
+        assert "Modo_XLSX" in workbook.sheetnames
+        assert "Entrada_Amostra" in workbook.sheetnames
+        assert "Entrada" not in workbook.sheetnames
+    finally:
+        workbook.close()
 
 
 def test_selecao_do_excel_nao_le_planilha_inteira_na_interface() -> None:
