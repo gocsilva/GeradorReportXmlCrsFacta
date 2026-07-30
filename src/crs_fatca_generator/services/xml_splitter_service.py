@@ -52,6 +52,7 @@ class XmlSplitterService:
                 tree = generator.build_tree(part_report)
             else:
                 _set_tree_message_ref_id(tree, part_report.message_spec.message_ref_id)
+                _set_tree_reporting_fi_doc_ref_id(tree, part_report.reporting_fi.doc_spec.doc_ref_id)
             atomic_write(tree, part_path, pretty_print)
             written.append((part_path, tree))
             self._emit(progress_callback, index, total, part_path.name)
@@ -91,6 +92,7 @@ class XmlSplitterService:
         for index, (country, chunk) in enumerate(chunk_specs, 1):
             part_root = deepcopy(root)
             self._set_existing_message_ref_id(part_root, index)
+            self._set_existing_reporting_fi_doc_ref_id(part_root, country, index)
             self._set_existing_receiving_country(part_root, country)
             part_group = _find_reporting_group(part_root)
             if part_group is None:
@@ -158,7 +160,15 @@ class XmlSplitterService:
 
     def _part_report(self, report: TaxReport, accounts: list[AccountReport], country: str, part_index: int) -> TaxReport:
         message = _part_message_spec(report.message_spec, country, part_index)
-        return replace(report, message_spec=message, accounts=accounts)
+        reporting_fi = report.reporting_fi
+        if part_index:
+            suffix = _part_suffix(country, part_index)
+            doc_spec = replace(
+                reporting_fi.doc_spec,
+                doc_ref_id=f"{_clean_identifier(reporting_fi.doc_spec.doc_ref_id)}{suffix}",
+            )
+            reporting_fi = replace(reporting_fi, doc_spec=doc_spec)
+        return replace(report, message_spec=message, reporting_fi=reporting_fi, accounts=accounts)
 
     def _chunk_existing_accounts(
         self,
@@ -196,6 +206,13 @@ class XmlSplitterService:
             return
         current = str(matches[0].text or "").strip() or "MESSAGE"
         matches[0].text = f"{_clean_identifier(current)}P{part_index:03d}"
+
+    def _set_existing_reporting_fi_doc_ref_id(self, root: etree._Element, country: str, part_index: int) -> None:
+        matches = root.xpath(".//*[local-name()='ReportingFI']/*[local-name()='DocSpec']/*[local-name()='DocRefId']")
+        if not matches:
+            return
+        current = str(matches[0].text or "").strip() or "REPORTINGFI"
+        matches[0].text = f"{_clean_identifier(current)}{_part_suffix(country, part_index)}"
 
     def _set_existing_receiving_country(self, root: etree._Element, country: str) -> None:
         matches = root.xpath(".//*[local-name()='ReceivingCountry']")
@@ -288,7 +305,7 @@ def _xml_kind(root: etree._Element) -> str:
 
 
 def _part_message_spec(message: MessageSpec, country: str, part_index: int) -> MessageSpec:
-    suffix = f"{_clean_identifier(country)[:2] or 'XX'}P{part_index:03d}" if part_index else ""
+    suffix = _part_suffix(country, part_index) if part_index else ""
     return replace(
         message,
         receiving_country=country,
@@ -296,8 +313,18 @@ def _part_message_spec(message: MessageSpec, country: str, part_index: int) -> M
     )
 
 
+def _part_suffix(country: str, part_index: int) -> str:
+    return f"{_clean_identifier(country)[:2] or 'XX'}P{part_index:03d}"
+
+
 def _set_tree_message_ref_id(tree: etree._ElementTree, value: str) -> None:
     matches = tree.getroot().xpath(".//*[local-name()='MessageRefId']")
+    if matches:
+        matches[0].text = value
+
+
+def _set_tree_reporting_fi_doc_ref_id(tree: etree._ElementTree, value: str) -> None:
+    matches = tree.getroot().xpath(".//*[local-name()='ReportingFI']/*[local-name()='DocSpec']/*[local-name()='DocRefId']")
     if matches:
         matches[0].text = value
 

@@ -39,3 +39,5 @@
 - Amplia a limpeza para remover caracteres invalidos/desencorajados do XML 1.0 e atributos antes de serializar CRS/FATCA.
 - Otimiza a divisao por MB removendo medicoes repetidas de XMLs grandes; o planejamento agora e linear por `AccountReport`.
 - Adiciona aba para limpar XML CRS/FATCA ja gerado e salvar uma copia sem caracteres invalidos/bloqueados pelo portal.
+- Converte textos do XML para ASCII seguro, corrigindo mojibake comum (`HÃ©lio` -> `Helio`) e removendo acentos/caracteres nao ASCII.
+- Garante `ReportingFI/DocRefId` sequencial e unico por arquivo dividido, evitando duplicidade entre partes.

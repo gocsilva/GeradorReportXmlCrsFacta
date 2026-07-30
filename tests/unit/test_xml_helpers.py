@@ -7,10 +7,11 @@ from crs_fatca_generator.services.xml_sanitizer_service import XmlSanitizerServi
 
 
 def test_sanitize_xml_text_remove_caracteres_bloqueados_pelo_portal() -> None:
-    raw = "Cliente A&B <Teste> -- contrato /* antigo &#123;\x08\x7f\ufdd0"
+    raw = "Rua HÃ©lio Rodrigues Ferreira & JoÃ£o Pessoa <Teste> -- contrato /* antigo &#123;\x08\x7f\ufdd0"
 
     cleaned = sanitize_xml_text(raw)
 
+    assert cleaned.startswith("Rua Helio Rodrigues Ferreira e Joao Pessoa")
     assert "&" not in cleaned
     assert "<" not in cleaned
     assert "--" not in cleaned
@@ -19,6 +20,7 @@ def test_sanitize_xml_text_remove_caracteres_bloqueados_pelo_portal() -> None:
     assert "\x08" not in cleaned
     assert "\x7f" not in cleaned
     assert "\ufdd0" not in cleaned
+    assert cleaned.isascii()
 
 
 def test_strip_invalid_xml_chars_preserva_faixa_valida_xml_10() -> None:

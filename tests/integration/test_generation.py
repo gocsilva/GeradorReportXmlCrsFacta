@@ -133,6 +133,11 @@ def test_geracao_crs_respeita_limite_de_tamanho_sem_quebrar_account_report(tmp_p
     assert len(paths) > 1
     assert not (tmp_path / "crs_limitado.xml").exists()
     assert sum(int(etree.parse(str(path)).xpath("count(.//*[local-name()='AccountReport'])")) for path in paths) == 3
+    reporting_fi_doc_refs = [
+        etree.parse(str(path)).xpath("string(.//*[local-name()='ReportingFI']/*[local-name()='DocSpec']/*[local-name()='DocRefId'])")
+        for path in paths
+    ]
+    assert len(reporting_fi_doc_refs) == len(set(reporting_fi_doc_refs))
     assert all(XmlValidator().validate_file(path, default_crs_schema(), "crs") == [] for path in paths)
 
 
@@ -179,6 +184,11 @@ def test_divide_xml_existente_por_account_report(tmp_path: Path, monkeypatch: py
 
     assert len(parts) > 1
     assert sum(int(etree.parse(str(path)).xpath("count(.//*[local-name()='AccountReport'])")) for path in parts) == 3
+    reporting_fi_doc_refs = [
+        etree.parse(str(path)).xpath("string(.//*[local-name()='ReportingFI']/*[local-name()='DocSpec']/*[local-name()='DocRefId'])")
+        for path in parts
+    ]
+    assert len(reporting_fi_doc_refs) == len(set(reporting_fi_doc_refs))
     assert all(XmlValidator().validate_file(path, default_crs_schema(), "crs") == [] for path in parts)
 
 

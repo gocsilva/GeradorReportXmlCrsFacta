@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import re
 import tempfile
+import unicodedata
 from pathlib import Path
 
 from lxml import etree
@@ -43,9 +44,11 @@ def add(parent: etree._Element, ns: str, tag: str, text: object = "", attrib: di
 
 
 def sanitize_xml_text(value: object) -> str:
-    text = strip_invalid_xml_chars(str(value))
+    text = _repair_mojibake(strip_invalid_xml_chars(str(value)))
+    text = strip_invalid_xml_chars(text)
     for pattern, replacement in PORTAL_PROHIBITED_TEXT_PATTERNS:
         text = text.replace(pattern, replacement)
+    text = _ascii_only(text)
     return re.sub(r"\s+", " ", text).strip()
 
 
@@ -55,6 +58,21 @@ def strip_invalid_xml_chars(value: str) -> str:
         for char in remove_control_chars(str(value))
         if _is_valid_xml_10_char(char) and not _is_discouraged_xml_10_char(char)
     )
+
+
+def _repair_mojibake(value: str) -> str:
+    if not any(marker in value for marker in ("Ã", "Â", "â")):
+        return value
+    try:
+        repaired = value.encode("latin1", errors="ignore").decode("utf-8")
+    except UnicodeError:
+        return value
+    return repaired if repaired else value
+
+
+def _ascii_only(value: str) -> str:
+    normalized = unicodedata.normalize("NFKD", value)
+    return normalized.encode("ascii", "ignore").decode("ascii")
 
 
 def _is_valid_xml_10_char(char: str) -> bool:
