@@ -26,6 +26,7 @@
 - Aplica regra DITC para CRS: limite automatico de 150 MB quando o campo esta em `0 MB`, divisao por pais receptor e MessageRefId unico por parte.
 - Aplica as mesmas regras DITC tambem para limite CRS manual, como `80 MB`: pais receptor, lotes de contas, tamanho maximo e MessageRefId unico por parte.
 - Otimiza a divisao de XML gerado para criar lotes antes da escrita, evitando montar um XML gigante antes de separar os arquivos.
+- Remove qualquer corte por quantidade fixa de registros na divisao por MB; o app agora estima e mede o tamanho real para preencher cada XML ate perto do limite configurado.
 - Cacheia schemas XSD e enumeracoes durante a validacao para reduzir tempo em geracoes com muitos arquivos divididos.
 - Reduz memoria na leitura do Excel evitando `_raw_values` em layouts sem blocos de controlador.
 - Cacheia deteccao de blocos de controlador e pula a varredura quando o layout nao possui esses blocos.

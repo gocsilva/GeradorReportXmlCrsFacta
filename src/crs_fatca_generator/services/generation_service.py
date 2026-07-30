@@ -188,7 +188,7 @@ class GenerationService:
         if size_limit <= 0:
             return "sem_limite"
         if kind == "crs":
-            return "crs_pais_receptor_lotes_2000_limite_mb_message_ref_unico"
+            return "crs_pais_receptor_limite_mb_message_ref_unico_accountreport_inteiro"
         return "fatca_limite_mb_message_ref_unico"
 
     def _flush_identifier_store(self) -> None:

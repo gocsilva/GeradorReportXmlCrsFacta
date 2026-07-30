@@ -15,7 +15,8 @@ from crs_fatca_generator.services.xml_helpers import atomic_write
 
 ProgressCallback = Callable[[int, int, str], None]
 DITC_CRS_MAX_MB = 150
-DITC_CRS_MAX_ACCOUNTS_PER_FILE = 2_000
+SPLIT_SIZE_SAMPLE_ACCOUNTS = 128
+SPLIT_HEADER_SAFETY_BYTES = 4 * 1024
 
 
 class XmlSplitterService:
@@ -82,9 +83,8 @@ class XmlSplitterService:
         kind = _xml_kind(root)
         chunk_specs: list[tuple[str, list[etree._Element]]] = []
         for country, country_accounts in _existing_accounts_by_receiving_country(kind, root, accounts):
-            for batch in _chunks_by_count(country_accounts, DITC_CRS_MAX_ACCOUNTS_PER_FILE if kind == "crs" else len(country_accounts)):
-                for chunk in self._chunk_existing_accounts(root, batch, size_limit_mb):
-                    chunk_specs.append((country, chunk))
+            for chunk in self._chunk_existing_accounts(root, country_accounts, size_limit_mb):
+                chunk_specs.append((country, chunk))
         output_dir.mkdir(parents=True, exist_ok=True)
         paths: list[Path] = []
         total = len(chunk_specs)
@@ -115,35 +115,108 @@ class XmlSplitterService:
         write_progress_callback: Callable[[int, int, AccountReport], None] | None = None,
     ) -> list[tuple[str, list[AccountReport], etree._ElementTree | None]]:
         generator = CrsGenerator() if kind == "crs" else FatcaGenerator()
-        max_bytes = _mb_to_bytes(size_limit_mb)
+        max_bytes = max(_mb_to_bytes(size_limit_mb) - SPLIT_HEADER_SAFETY_BYTES, 1)
         planned: list[tuple[str, list[AccountReport], etree._ElementTree | None]] = []
         country_groups = _accounts_by_receiving_country(kind, report)
         for country, accounts in country_groups:
-            for batch in _chunks_by_count(accounts, DITC_CRS_MAX_ACCOUNTS_PER_FILE if kind == "crs" else len(accounts)):
-                planned.extend(self._fit_report_batch(kind, report, country, batch, max_bytes, pretty_print, generator, 0, write_progress_callback))
+            planned.extend(self._plan_country_parts(report, country, accounts, max_bytes, pretty_print, generator, write_progress_callback))
         return planned
 
-    def _fit_report_batch(
+    def _plan_country_parts(
         self,
-        kind: str,
         report: TaxReport,
         country: str,
         accounts: list[AccountReport],
         max_bytes: int,
         pretty_print: bool,
         generator: object,
-        depth: int,
         write_progress_callback: Callable[[int, int, AccountReport], None] | None = None,
     ) -> list[tuple[str, list[AccountReport], etree._ElementTree | None]]:
-        part_report = self._part_report(report, accounts, country, 0)
-        progress = write_progress_callback if depth == 0 else None
-        tree = generator.build_tree(part_report, progress_callback=progress)  # type: ignore[attr-defined]
-        if len(accounts) <= 1 or _tree_size(tree, pretty_print) <= max_bytes:
-            return [(country, accounts, tree)]
-        middle = max(len(accounts) // 2, 1)
-        left = self._fit_report_batch(kind, report, country, accounts[:middle], max_bytes, pretty_print, generator, depth + 1)
-        right = self._fit_report_batch(kind, report, country, accounts[middle:], max_bytes, pretty_print, generator, depth + 1)
-        return left + right
+        planned: list[tuple[str, list[AccountReport], etree._ElementTree | None]] = []
+        start = 0
+        total = len(accounts)
+        if write_progress_callback and accounts:
+            write_progress_callback(1, total, accounts[0])
+        while start < total:
+            chunk_accounts, tree = self._largest_fitting_chunk(report, country, accounts, start, max_bytes, pretty_print, generator)
+            planned.append((country, chunk_accounts, tree))
+            start += len(chunk_accounts)
+            if write_progress_callback and chunk_accounts:
+                write_progress_callback(start, total, chunk_accounts[-1])
+        return planned
+
+    def _largest_fitting_chunk(
+        self,
+        report: TaxReport,
+        country: str,
+        accounts: list[AccountReport],
+        start: int,
+        max_bytes: int,
+        pretty_print: bool,
+        generator: object,
+    ) -> tuple[list[AccountReport], etree._ElementTree]:
+        remaining = len(accounts) - start
+        good_count = 0
+        good_tree: etree._ElementTree | None = None
+        measured: dict[int, tuple[int, etree._ElementTree]] = {}
+
+        def measure(count: int) -> tuple[int, etree._ElementTree]:
+            count = max(min(count, remaining), 1)
+            if count in measured:
+                return measured[count]
+            part_accounts = accounts[start : start + count]
+            part_report = self._part_report(report, part_accounts, country, 0)
+            tree = generator.build_tree(part_report)  # type: ignore[attr-defined]
+            measured[count] = (_tree_size(tree, pretty_print), tree)
+            return measured[count]
+
+        sample_count = min(SPLIT_SIZE_SAMPLE_ACCOUNTS, remaining)
+        sample_size, sample_tree = measure(sample_count)
+        if sample_size <= max_bytes:
+            estimated_count = int(sample_count * (max_bytes / max(sample_size, 1)) * 0.95)
+            initial_count = min(max(estimated_count, sample_count), remaining)
+        else:
+            initial_count = sample_count
+
+        size, tree = measure(initial_count)
+        if size <= max_bytes:
+            good_count = initial_count
+            good_tree = tree
+            low = initial_count + 1
+            high = remaining
+            probe = initial_count
+            while probe < remaining:
+                probe = min(probe * 2, remaining)
+                size, tree = measure(probe)
+                if size <= max_bytes:
+                    good_count = probe
+                    good_tree = tree
+                    low = probe + 1
+                    if probe == remaining:
+                        break
+                    continue
+                high = probe - 1
+                break
+        else:
+            low = 1
+            high = initial_count - 1
+            if sample_count == 1:
+                good_tree = sample_tree
+
+        while low <= high:
+            middle = (low + high) // 2
+            size, tree = measure(middle)
+            if size <= max_bytes:
+                good_count = middle
+                good_tree = tree
+                low = middle + 1
+            else:
+                high = middle - 1
+
+        if good_count <= 0 or good_tree is None:
+            _size, good_tree = measure(1)
+            good_count = 1
+        return accounts[start : start + good_count], good_tree
 
     def _part_report(self, report: TaxReport, accounts: list[AccountReport], country: str, part_index: int) -> TaxReport:
         message = _part_message_spec(report.message_spec, country, part_index)
@@ -155,7 +228,7 @@ class XmlSplitterService:
         accounts: list[etree._Element],
         size_limit_mb: int,
     ) -> list[list[etree._Element]]:
-        max_bytes = _mb_to_bytes(size_limit_mb)
+        max_bytes = max(_mb_to_bytes(size_limit_mb) - SPLIT_HEADER_SAFETY_BYTES, 1)
         empty_root = deepcopy(root)
         group = _find_reporting_group(empty_root)
         if group is None:
@@ -267,11 +340,6 @@ def _xml_kind(root: etree._Element) -> str:
     if "fatca" in local_name:
         return "fatca"
     return "crs"
-
-
-def _chunks_by_count(accounts: list[AccountReport], max_items: int) -> list[list[AccountReport]]:
-    max_items = max(int(max_items or len(accounts) or 1), 1)
-    return [accounts[index : index + max_items] for index in range(0, len(accounts), max_items)]
 
 
 def _part_message_spec(message: MessageSpec, country: str, part_index: int) -> MessageSpec:
