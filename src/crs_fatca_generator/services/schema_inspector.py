@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 
 from lxml import etree
@@ -47,16 +48,8 @@ class SchemaInspector:
         return SchemaInspection(schema_path, namespace, root_element, imports, enums, fields)
 
     def enums(self, schema_path: Path) -> dict[str, list[str]]:
-        result: dict[str, list[str]] = {}
-        for xsd in [schema_path, *schema_path.parent.glob("*.xsd")]:
-            doc = etree.parse(str(xsd), secure_xml_parser())
-            for simple_type in doc.xpath(".//xs:simpleType | .//xsd:simpleType", namespaces=XS):
-                name = simple_type.get("name")
-                values = [enum.get("value") for enum in simple_type.xpath(".//xs:enumeration | .//xsd:enumeration", namespaces=XS)]
-                values = [value for value in values if value]
-                if name and values:
-                    result[name] = values
-        return result
+        resolved = schema_path.resolve()
+        return {key: list(values) for key, values in _enums_cached(str(resolved), _schema_fingerprint(resolved)).items()}
 
     def _collect_top_level_fields(self, doc: etree._ElementTree, root_element: str, namespace: str) -> list[SchemaField]:
         fields: list[SchemaField] = []
@@ -84,3 +77,22 @@ class SchemaInspector:
                 )
             )
         return fields
+
+
+@lru_cache(maxsize=16)
+def _enums_cached(schema_path_text: str, _fingerprint: tuple[tuple[str, int], ...]) -> dict[str, tuple[str, ...]]:
+    schema_path = Path(schema_path_text)
+    result: dict[str, tuple[str, ...]] = {}
+    for xsd in [schema_path, *schema_path.parent.glob("*.xsd")]:
+        doc = etree.parse(str(xsd), secure_xml_parser())
+        for simple_type in doc.xpath(".//xs:simpleType | .//xsd:simpleType", namespaces=XS):
+            name = simple_type.get("name")
+            values = tuple(value for value in (enum.get("value") for enum in simple_type.xpath(".//xs:enumeration | .//xsd:enumeration", namespaces=XS)) if value)
+            if name and values:
+                result[name] = values
+    return result
+
+
+def _schema_fingerprint(schema_path: Path) -> tuple[tuple[str, int], ...]:
+    files = [schema_path, *schema_path.parent.glob("*.xsd")]
+    return tuple(sorted((str(file.resolve()), file.stat().st_mtime_ns) for file in files if file.exists()))

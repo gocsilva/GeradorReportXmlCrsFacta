@@ -136,7 +136,6 @@ def test_geracao_crs_respeita_limite_de_tamanho_sem_quebrar_account_report(tmp_p
 
 
 def test_divide_xml_existente_por_account_report(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(splitter_module, "_mb_to_bytes", lambda _value: 1800)
     profile = infer_default_profile(["DocumentoCliente", "Tipo de documento", "NumConta", "NomeCliente", "SaldoTotal", "Endereco", "Cidade", "Pais"])
     profile.output.crs_path = str(tmp_path / "crs_original.xml")
     rows = [
@@ -147,6 +146,7 @@ def test_divide_xml_existente_por_account_report(tmp_path: Path, monkeypatch: py
     result = GenerationService(default_crs_schema(), default_fatca_schema()).generate(["crs"], rows, profile, Path("entrada.xlsx"), overwrite=True)[0]
     assert result.valid is True
 
+    monkeypatch.setattr(splitter_module, "_mb_to_bytes", lambda _value: 1800)
     parts = XmlSplitterService().split_existing_xml(tmp_path / "crs_original.xml", tmp_path / "partes", 1)
 
     assert len(parts) > 1

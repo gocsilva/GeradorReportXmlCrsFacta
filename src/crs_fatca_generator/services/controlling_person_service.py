@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import unicodedata
 from dataclasses import dataclass
-from typing import Any
+from functools import lru_cache
+from typing import Any, Sequence
 
 from crs_fatca_generator.models.domain import ValidationIssue
 from crs_fatca_generator.security.masking import mask_value
@@ -64,12 +65,17 @@ class ControllingPersonRecord:
 
 
 def detect_controlling_person_blocks(headers: list[str]) -> list[dict[str, int]]:
+    return [dict(block) for block in _detect_controlling_person_blocks_cached(tuple(headers))]
+
+
+@lru_cache(maxsize=32)
+def _detect_controlling_person_blocks_cached(headers: tuple[str, ...]) -> tuple[tuple[tuple[str, int], ...], ...]:
     starts = [
         index
         for index, header in enumerate(headers)
         if index >= CONTROLLING_BLOCK_START_INDEX and _header_key(header) == "name type"
     ]
-    blocks: list[dict[str, int]] = []
+    blocks: list[tuple[tuple[str, int], ...]] = []
     for block_index, start in enumerate(starts, 1):
         end = starts[block_index] if block_index < len(starts) else len(headers)
         field_indexes: dict[str, int] = {}
@@ -90,13 +96,13 @@ def detect_controlling_person_blocks(headers: list[str]) -> list[dict[str, int]]
             }:
                 field_indexes.setdefault(header, index)
         if field_indexes:
-            blocks.append(field_indexes)
-    return blocks
+            blocks.append(tuple(field_indexes.items()))
+    return tuple(blocks)
 
 
 def extract_controlling_persons(row: dict[str, Any]) -> tuple[list[ControllingPersonRecord], list[ValidationIssue], dict[str, int]]:
-    headers = list(row.get("_headers") or [])
-    raw_values = list(row.get("_raw_values") or [])
+    headers = row.get("_headers") or []
+    raw_values = row.get("_raw_values") or ()
     blocks = detect_controlling_person_blocks(headers)
     records: list[ControllingPersonRecord] = []
     issues: list[ValidationIssue] = []
@@ -230,7 +236,7 @@ def _canonical_header(value: Any) -> str:
     return aliases.get(key, normalize_text(value))
 
 
-def _value_at(values: list[Any], index: int) -> Any:
+def _value_at(values: Sequence[Any], index: int) -> Any:
     return values[index] if index < len(values) else ""
 
 

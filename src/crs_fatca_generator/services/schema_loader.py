@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 
 from lxml import etree
@@ -35,28 +36,40 @@ class LocalResolver(etree.Resolver):
 
 class SchemaLoader:
     def load(self, kind: str, version: str, schema_path: Path) -> SchemaBundle:
-        parser = secure_xml_parser()
-        parser.resolvers.add(LocalResolver(schema_path.parent))
-        doc = etree.parse(str(schema_path), parser)
-        schema = etree.XMLSchema(doc)
-        root = doc.getroot()
-        xs = {"xs": "http://www.w3.org/2001/XMLSchema", "xsd": "http://www.w3.org/2001/XMLSchema"}
-        imports = [
-            (schema_path.parent / item.get("schemaLocation")).resolve()
-            for item in root.xpath("./xs:import | ./xsd:import", namespaces=xs)
-            if item.get("schemaLocation")
-        ]
-        root_elements = root.xpath("./xs:element | ./xsd:element", namespaces=xs)
-        root_element = root_elements[0].get("name") if root_elements else ""
-        files = [schema_path.resolve(), *imports]
-        hashes = {file.name: sha256_file(file) for file in files if file.exists()}
-        return SchemaBundle(
-            kind=kind,
-            version=version,
-            main_schema=schema_path.resolve(),
-            namespace=root.get("targetNamespace") or "",
-            root_element=root_element,
-            imported_files=imports,
-            hashes=hashes,
-            xml_schema=schema,
-        )
+        resolved = schema_path.resolve()
+        return _load_cached(kind, version, str(resolved), _schema_fingerprint(resolved))
+
+
+@lru_cache(maxsize=16)
+def _load_cached(kind: str, version: str, schema_path_text: str, _fingerprint: tuple[tuple[str, int], ...]) -> SchemaBundle:
+    schema_path = Path(schema_path_text)
+    parser = secure_xml_parser()
+    parser.resolvers.add(LocalResolver(schema_path.parent))
+    doc = etree.parse(str(schema_path), parser)
+    schema = etree.XMLSchema(doc)
+    root = doc.getroot()
+    xs = {"xs": "http://www.w3.org/2001/XMLSchema", "xsd": "http://www.w3.org/2001/XMLSchema"}
+    imports = [
+        (schema_path.parent / item.get("schemaLocation")).resolve()
+        for item in root.xpath("./xs:import | ./xsd:import", namespaces=xs)
+        if item.get("schemaLocation")
+    ]
+    root_elements = root.xpath("./xs:element | ./xsd:element", namespaces=xs)
+    root_element = root_elements[0].get("name") if root_elements else ""
+    files = [schema_path.resolve(), *imports]
+    hashes = {file.name: sha256_file(file) for file in files if file.exists()}
+    return SchemaBundle(
+        kind=kind,
+        version=version,
+        main_schema=schema_path.resolve(),
+        namespace=root.get("targetNamespace") or "",
+        root_element=root_element,
+        imported_files=imports,
+        hashes=hashes,
+        xml_schema=schema,
+    )
+
+
+def _schema_fingerprint(schema_path: Path) -> tuple[tuple[str, int], ...]:
+    files = [schema_path, *schema_path.parent.glob("*.xsd")]
+    return tuple(sorted((str(file.resolve()), file.stat().st_mtime_ns) for file in files if file.exists()))

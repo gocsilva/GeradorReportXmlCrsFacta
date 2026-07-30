@@ -23,3 +23,13 @@
 - Adiciona aba para dividir XML CRS/FATCA existente em partes por tamanho sem quebrar registros.
 - Adiciona checkboxes de geracao CRS/FATCA marcados por padrao e respeitados pelo botao simples.
 - Aplica filtro FATCA por `USPerson = true` quando a coluna existe no Excel; CRS continua usando os registros do fluxo anterior.
+- Aplica regra DITC para CRS: limite automatico de 150 MB quando o campo esta em `0 MB`, divisao por pais receptor e MessageRefId unico por parte.
+- Aplica as mesmas regras DITC tambem para limite CRS manual, como `80 MB`: pais receptor, lotes de contas, tamanho maximo e MessageRefId unico por parte.
+- Otimiza a divisao de XML gerado para criar lotes antes da escrita, evitando montar um XML gigante antes de separar os arquivos.
+- Cacheia schemas XSD e enumeracoes durante a validacao para reduzir tempo em geracoes com muitos arquivos divididos.
+- Reduz memoria na leitura do Excel evitando `_raw_values` em layouts sem blocos de controlador.
+- Cacheia deteccao de blocos de controlador e pula a varredura quando o layout nao possui esses blocos.
+- Cacheia valores de mapeamento por linha durante a montagem CRS/FATCA.
+- Escreve a auditoria CSV em streaming, sem montar todas as linhas em memoria.
+- Pula auditoria de US Tax ID para linhas com `USPerson` falso, pois elas nao entram no FATCA.
+- Reaproveita conexao SQLite e grava identificadores em lote para acelerar geracao de muitos `DocRefId`.

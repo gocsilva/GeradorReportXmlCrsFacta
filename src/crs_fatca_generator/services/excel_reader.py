@@ -6,6 +6,8 @@ from typing import Any, Callable
 
 import openpyxl
 
+from crs_fatca_generator.services.controlling_person_service import detect_controlling_person_blocks
+
 
 @dataclass
 class ExcelPreview:
@@ -41,6 +43,7 @@ class ExcelReader:
             raw_headers = self._headers(sheet, header_row)
             headers = self._unique_headers(raw_headers)
             duplicate_headers = self._duplicates(raw_headers)
+            needs_raw_values = _needs_raw_values(raw_headers)
             first_data_row = start_row or header_row + 1
             last_row = min(end_row or sheet.max_row, first_data_row + limit - 1)
             rows = []
@@ -49,7 +52,8 @@ class ExcelReader:
                 item = {headers[i]: row[i] if i < len(row) else None for i in range(len(headers))}
                 item["_headers"] = raw_headers
                 item["_field_headers"] = headers
-                item["_raw_values"] = list(row[: len(headers)])
+                if needs_raw_values:
+                    item["_raw_values"] = row[: len(headers)]
                 rows.append(item)
                 for header, value in item.items():
                     if header.startswith("_"):
@@ -78,6 +82,7 @@ class ExcelReader:
             sheet = wb[sheet_name]
             raw_headers = self._headers(sheet, header_row)
             headers = self._unique_headers(raw_headers)
+            needs_raw_values = _needs_raw_values(raw_headers)
             first_data_row = start_row or header_row + 1
             last_row = end_row or sheet.max_row
             total_rows = max(last_row - first_data_row + 1, 0)
@@ -87,7 +92,8 @@ class ExcelReader:
                 item["_excel_row"] = index
                 item["_headers"] = raw_headers
                 item["_field_headers"] = headers
-                item["_raw_values"] = list(row[: len(headers)])
+                if needs_raw_values:
+                    item["_raw_values"] = row[: len(headers)]
                 if any(value not in (None, "") for key, value in item.items() if not key.startswith("_")):
                     rows.append(item)
                 processed = index - first_data_row + 1
@@ -125,3 +131,7 @@ class ExcelReader:
             counts[key] = counts.get(key, 0) + 1
             unique.append(header if counts[key] == 1 else f"{header} #{counts[key]}")
         return unique
+
+
+def _needs_raw_values(raw_headers: list[str]) -> bool:
+    return bool(detect_controlling_person_blocks(raw_headers))

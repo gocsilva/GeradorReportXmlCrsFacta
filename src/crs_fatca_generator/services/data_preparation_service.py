@@ -18,7 +18,7 @@ from openpyxl.utils import get_column_letter
 from crs_fatca_generator.models.domain import ValidationIssue
 from crs_fatca_generator.models.mapping import MappingProfile
 from crs_fatca_generator.security.masking import mask_value
-from crs_fatca_generator.services.controlling_person_service import ControllingPersonRecord, extract_controlling_persons
+from crs_fatca_generator.services.controlling_person_service import ControllingPersonRecord, detect_controlling_person_blocks, extract_controlling_persons
 from crs_fatca_generator.services.fatca_missing_tin_policy import FatcaMissingTinPolicy
 from crs_fatca_generator.services.file_hash import sha256_file
 from crs_fatca_generator.services.tax_identifier_service import classify_tax_identifier
@@ -185,15 +185,15 @@ class DataPreparationService:
         json_path = output_dir / f"{stem}_manifesto_auditoria.json"
         reports = reports or {}
         results = results or []
-        rows = self._csv_rows(prepared, results, reports)
-        headers = list(rows[0].keys())
-        self._emit_progress(progress_callback, "Gerando auditoria: CSV completo", 0, len(rows), csv_path.name)
+        headers = self._csv_headers()
+        csv_total = max(len(prepared.original_rows), 1)
+        self._emit_progress(progress_callback, "Gerando auditoria: CSV completo", 0, csv_total, csv_path.name)
         with csv_path.open("w", encoding="utf-8-sig", newline="") as handle:
             writer = csv.DictWriter(handle, fieldnames=headers, delimiter=";")
             writer.writeheader()
-            for index, row in enumerate(rows, 1):
+            for index, row in enumerate(self._iter_csv_rows(prepared, results, reports), 1):
                 writer.writerow(row)
-                self._emit_progress(progress_callback, "Gerando auditoria: CSV completo", index, len(rows), f"CSV linha {index}", force=index == len(rows))
+                self._emit_progress(progress_callback, "Gerando auditoria: CSV completo", index, csv_total, f"CSV linha {index}", force=index == csv_total)
         workbook = openpyxl.Workbook()
         compact_audit = self._use_compact_xlsx(prepared)
         if compact_audit:
@@ -435,6 +435,19 @@ class DataPreparationService:
         progress_callback: ProgressCallback | None = None,
     ) -> list[ValidationIssue]:
         issues: list[ValidationIssue] = []
+        if not _has_controlling_person_blocks(rows):
+            events.append(
+                self._summary_rule_event(
+                    "CONTROLLING_PERSON",
+                    "NAO_AVALIADA_DADO_AUSENTE",
+                    "Layout sem blocos repetidos de controlador. Varredura detalhada ignorada para reduzir tempo de processamento.",
+                    "INFO",
+                    required_data="blocos ControllingPerson",
+                    found_data="nao",
+                )
+            )
+            self._emit_progress(progress_callback, "Preparando dados: controladores", len(rows), len(rows), "")
+            return issues
         total = len(rows)
         for index, row in enumerate(rows, 1):
             records, record_issues, metrics = extract_controlling_persons(row)
@@ -560,6 +573,15 @@ class DataPreparationService:
         policy = FatcaMissingTinPolicy()
         total = len(rows)
         for index, row in enumerate(rows, 1):
+            if _usperson_value(row) is not None and not _is_true_value(_usperson_value(row)):
+                row["_fatca_us_tin"] = ""
+                row["_fatca_us_tin_status"] = "NAO_APLICAVEL_USPERSON_FALSE"
+                row["_fatca_us_tin_reason"] = "Registro nao marcado como USPerson; fora do XML FATCA."
+                row["_fatca_us_tin_issued_by"] = "US"
+                row["_fatca_us_tin_policy"] = "NOT_APPLICABLE"
+                row["_fatca_us_tin_blocking"] = "nao"
+                self._emit_progress(progress_callback, "Preparando dados: FATCA US Tax ID", index, total, self._row_label(row), force=index == total)
+                continue
             decision = policy.decide_xml_representation(row, profile)
             row["_fatca_us_tin"] = decision.tins[0].value if decision.tins else ""
             row["_fatca_us_tin_status"] = decision.status
@@ -773,12 +795,43 @@ class DataPreparationService:
             sheet.column_dimensions[get_column_letter(column_index)].width = min(width + 2, 80)
 
     def _csv_rows(self, prepared: PreparedData, results: list[Any], reports: dict[str, Any]) -> list[dict[str, object]]:
+        return list(self._iter_csv_rows(prepared, results, reports))
+
+    def _csv_headers(self) -> list[str]:
+        return [
+            "identificador",
+            "linha_origem",
+            "conta",
+            "nome",
+            "PF_PJ",
+            "documento_original",
+            "documento_normalizado",
+            "saldo_original",
+            "saldo_final",
+            "status_CI",
+            "status_CC",
+            "REGRA_01 resultado",
+            "REGRA_02 resultado",
+            "REGRA_03 resultado",
+            "decisao",
+            "regra_aplicada",
+            "CRS_incluido",
+            "FATCA_incluido",
+            "DocRefId",
+            "US_TIN_status",
+            "politica_US_TIN",
+            "resultado_XSD",
+            "severidade",
+            "mensagem",
+        ]
+
+    def _iter_csv_rows(self, prepared: PreparedData, results: list[Any], reports: dict[str, Any]) -> Any:
         result_by_kind = {getattr(result, "kind", ""): result for result in results}
-        rows: list[dict[str, object]] = []
         prepared_by_line = self._prepared_by_line(prepared.rows)
         events_by_line = self._events_by_line(prepared.events)
         rule_results = self._rule_results_by_line(prepared.events)
         account_doc_refs = self._account_doc_refs(reports)
+        accounts_by_kind = self._account_numbers_by_kind(reports)
         for index, row in enumerate(prepared.original_rows, 1):
             line = _excel_row(row)
             normalized = prepared_by_line.get(line)
@@ -787,37 +840,34 @@ class DataPreparationService:
             document = normalize_text(_row_value(row, "DocumentoCliente", "Identification Number / CPF"))
             final_balance = _row_value(normalized or row, "SaldoTotal", "Saldo da conta em 31/12/2025")
             decision = "incluido" if normalized is not None else "excluido"
-            rows.append(
-                {
-                    "identificador": f"REG-{index:05d}",
-                    "linha_origem": _excel_row(row) or "",
-                    "conta": mask_value(account),
-                    "nome": mask_value(_row_value(row, "NomeCliente", "Name")),
-                    "PF_PJ": _row_value(row, "Tipo de documento", "DocumentType"),
-                    "documento_original": mask_value(document),
-                    "documento_normalizado": mask_value(_row_value(normalized or row, "_documento_brasileiro", "DocumentoCliente", "Identification Number / CPF")),
-                    "saldo_original": _row_value(row, "SaldoTotal", "Saldo da conta em 31/12/2025"),
-                    "saldo_final": final_balance,
-                    "status_CI": _row_value(row, "DataHoraEncerramento CI"),
-                    "status_CC": _row_value(row, "Status em 31/12 em CC"),
-                    "REGRA_01 resultado": rule_results.get((line, "REGRA_01"), ""),
-                    "REGRA_02 resultado": rule_results.get((line, "REGRA_02"), ""),
-                    "REGRA_03 resultado": rule_results.get((line, "REGRA_03"), ""),
-                    "decisao": decision,
-                    "regra_aplicada": ";".join(event.rule for event in line_events),
-                    "CRS_incluido": "sim" if normalized is not None and "crs" in reports else "nao",
-                    "FATCA_incluido": "sim" if normalized is not None and "fatca" in reports else "nao",
-                    "DocRefId": account_doc_refs.get(account, ""),
-                    "US_TIN_status": _row_value(normalized or row, "_fatca_us_tin_status"),
-                    "politica_US_TIN": _row_value(normalized or row, "_fatca_us_tin_policy"),
-                    "resultado_XSD": self._xsd_summary(result_by_kind),
-                    "severidade": "BLOQUEIO" if prepared.issues else ("ALERTA" if line_events else "INFO"),
-                    "mensagem": "; ".join(event.detail for event in line_events),
-                }
-            )
-        if not rows:
-            rows.append({"identificador": "", "linha_origem": "", "mensagem": "sem registros"})
-        return rows
+            yield {
+                "identificador": f"REG-{index:05d}",
+                "linha_origem": _excel_row(row) or "",
+                "conta": mask_value(account),
+                "nome": mask_value(_row_value(row, "NomeCliente", "Name")),
+                "PF_PJ": _row_value(row, "Tipo de documento", "DocumentType"),
+                "documento_original": mask_value(document),
+                "documento_normalizado": mask_value(_row_value(normalized or row, "_documento_brasileiro", "DocumentoCliente", "Identification Number / CPF")),
+                "saldo_original": _row_value(row, "SaldoTotal", "Saldo da conta em 31/12/2025"),
+                "saldo_final": final_balance,
+                "status_CI": _row_value(row, "DataHoraEncerramento CI"),
+                "status_CC": _row_value(row, "Status em 31/12 em CC"),
+                "REGRA_01 resultado": rule_results.get((line, "REGRA_01"), ""),
+                "REGRA_02 resultado": rule_results.get((line, "REGRA_02"), ""),
+                "REGRA_03 resultado": rule_results.get((line, "REGRA_03"), ""),
+                "decisao": decision,
+                "regra_aplicada": ";".join(event.rule for event in line_events),
+                "CRS_incluido": "sim" if normalized is not None and account in accounts_by_kind.get("crs", set()) else "nao",
+                "FATCA_incluido": "sim" if normalized is not None and account in accounts_by_kind.get("fatca", set()) else "nao",
+                "DocRefId": account_doc_refs.get(account, ""),
+                "US_TIN_status": _row_value(normalized or row, "_fatca_us_tin_status"),
+                "politica_US_TIN": _row_value(normalized or row, "_fatca_us_tin_policy"),
+                "resultado_XSD": self._xsd_summary(result_by_kind),
+                "severidade": "BLOQUEIO" if prepared.issues else ("ALERTA" if line_events else "INFO"),
+                "mensagem": "; ".join(event.detail for event in line_events),
+            }
+        if not prepared.original_rows:
+            yield {"identificador": "", "linha_origem": "", "mensagem": "sem registros"}
 
     def _summary_rows(self, prepared: PreparedData, profile: MappingProfile | None, excel_path: Path | None, file_hash: str, results: list[Any], reports: dict[str, Any]) -> list[dict[str, object]]:
         rows = prepared.rows
@@ -1193,6 +1243,12 @@ class DataPreparationService:
                 refs[normalize_text(account.account_number)] = account.doc_spec.doc_ref_id
         return refs
 
+    def _account_numbers_by_kind(self, reports: dict[str, Any]) -> dict[str, set[str]]:
+        indexed: dict[str, set[str]] = {}
+        for kind, report in reports.items():
+            indexed[str(kind)] = {normalize_text(account.account_number) for account in getattr(report, "accounts", [])}
+        return indexed
+
     def _identifier_summary_rows(self, reports: dict[str, Any]) -> list[dict[str, object]]:
         rows: list[dict[str, object]] = []
         for kind, report in reports.items():
@@ -1293,7 +1349,39 @@ def _normalize_status(value: Any) -> str:
 
 
 def _has_column(rows: list[dict[str, Any]], column: str) -> bool:
+    if not rows:
+        return False
+    first = rows[0]
+    if column in first:
+        return True
+    headers = first.get("_headers") or ()
+    field_headers = first.get("_field_headers") or ()
+    if column in headers or column in field_headers:
+        return True
     return any(column in row for row in rows)
+
+
+def _has_controlling_person_blocks(rows: list[dict[str, Any]]) -> bool:
+    for row in rows:
+        headers = row.get("_headers")
+        if headers:
+            return bool(detect_controlling_person_blocks(headers))
+    return False
+
+
+def _usperson_value(row: dict[str, Any]) -> Any:
+    for key, value in row.items():
+        normalized = "".join(char for char in str(key).lower() if char.isalnum())
+        if normalized == "usperson":
+            return value
+    return None
+
+
+def _is_true_value(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    text = normalize_text(value).lower()
+    return text in {"true", "1", "sim", "s", "yes", "y", "verdadeiro", "x"}
 
 
 def _excel_row(row: dict[str, Any]) -> int | None:

@@ -17,7 +17,7 @@ from crs_fatca_generator.services.mapping_service import MappingService
 from crs_fatca_generator.services.schema_inspector import SchemaInspector
 from crs_fatca_generator.services.schema_loader import SchemaLoader
 from crs_fatca_generator.services.xml_validator import XmlValidator
-from crs_fatca_generator.services.xml_splitter_service import XmlSplitterService
+from crs_fatca_generator.services.xml_splitter_service import DITC_CRS_MAX_MB, XmlSplitterService
 
 
 logger = logging.getLogger(__name__)
@@ -59,6 +59,7 @@ class GenerationService:
                 results.append(GenerationResult(kind, str(output_path), False, prepared.issues, {**audit_summary, **self._fiscal_summary(kind, profile), "status": "nao gerado"}))
             audit_total = max(len(prepared.original_rows), 1)
             self._emit_progress(progress_callback, "Gerando auditoria: iniciando", "", 0, audit_total, "")
+            self._flush_identifier_store()
             data_service.write_audit(prepared, self._audit_dir(profile), self._audit_stem(profile, excel_path), profile, excel_path, file_hash, results, reports, progress_callback)
             self._emit_progress(progress_callback, "Gerando auditoria: finalizada", "", audit_total, audit_total, "")
             return results
@@ -114,9 +115,9 @@ class GenerationService:
                 self._emit_progress(progress_callback, "Separando XML por tamanho", kind_name, processed, total, name)
 
             self._emit_progress(progress_callback, "Escrevendo XML", kind_name, 0, accounts_total, str(output_path.name))
-            size_limit = profile.output.crs_size_limit_mb if kind == "crs" else profile.output.fatca_size_limit_mb
+            size_limit = self._effective_size_limit_mb(kind, profile)
             if size_limit > 0:
-                written = XmlSplitterService().write_report_parts(kind, report, output_path, profile.output.pretty_print, size_limit, progress_callback=part_progress)
+                written = XmlSplitterService().write_report_parts(kind, report, output_path, profile.output.pretty_print, size_limit, progress_callback=part_progress, write_progress_callback=write_progress)
             elif kind == "crs":
                 written = [(output_path, CrsGenerator().write(report, output_path, profile.output.pretty_print, progress_callback=write_progress))]
             else:
@@ -145,11 +146,15 @@ class GenerationService:
                         "arquivos_xml": "; ".join(xml_paths),
                         "quantidade_arquivos_xml": len(xml_paths),
                         "limite_mb": size_limit,
+                        "limite_configurado_mb": self._configured_size_limit_mb(kind, profile),
+                        "regra_divisao_xml": self._split_rule_label(kind, size_limit),
+                        "limite_crs_ditc_auto": "sim" if kind == "crs" and profile.output.crs_size_limit_mb <= 0 else "nao",
                     },
                 )
             )
         audit_total = max(len(prepared.original_rows), 1)
         self._emit_progress(progress_callback, "Gerando auditoria: iniciando", "", 0, audit_total, "")
+        self._flush_identifier_store()
         data_service.write_audit(prepared, self._audit_dir(profile), self._audit_stem(profile, excel_path), profile, excel_path, file_hash, results, reports, progress_callback)
         self._emit_progress(progress_callback, "Gerando auditoria: finalizada", "", audit_total, audit_total, "")
         return results
@@ -165,6 +170,31 @@ class GenerationService:
         if path.suffix.lower() != ".xml":
             path = path.with_suffix(".xml")
         return path
+
+    def _effective_size_limit_mb(self, kind: str, profile: MappingProfile) -> int:
+        if kind == "crs":
+            configured = int(profile.output.crs_size_limit_mb or 0)
+            if configured <= 0:
+                return DITC_CRS_MAX_MB
+            return min(configured, DITC_CRS_MAX_MB)
+        return int(profile.output.fatca_size_limit_mb or 0)
+
+    def _configured_size_limit_mb(self, kind: str, profile: MappingProfile) -> int:
+        if kind == "crs":
+            return int(profile.output.crs_size_limit_mb or 0)
+        return int(profile.output.fatca_size_limit_mb or 0)
+
+    def _split_rule_label(self, kind: str, size_limit: int) -> str:
+        if size_limit <= 0:
+            return "sem_limite"
+        if kind == "crs":
+            return "crs_pais_receptor_lotes_2000_limite_mb_message_ref_unico"
+        return "fatca_limite_mb_message_ref_unico"
+
+    def _flush_identifier_store(self) -> None:
+        flush = getattr(self.mapping_service.identifier_store, "flush", None)
+        if callable(flush):
+            flush()
 
     def _summary(self, report: object, status: str) -> dict[str, int | str]:
         accounts = len(getattr(report, "accounts", []))

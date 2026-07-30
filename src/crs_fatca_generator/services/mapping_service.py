@@ -104,6 +104,10 @@ class MappingService:
 
     def value(self, field: str, row: dict[str, Any], profile: MappingProfile, default: str = "") -> str:
         rule = profile.field_mappings.get(field, MappingRule("empty"))
+        cache_key = (field, default)
+        cache = row.setdefault("_mapping_value_cache", {}) if rule.source != "auto" else None
+        if isinstance(cache, dict) and cache_key in cache:
+            return cache[cache_key]
         raw: Any = ""
         if rule.source == "fixed":
             raw = rule.fixed_value
@@ -111,18 +115,24 @@ class MappingService:
             raw = row.get(rule.column, "")
         elif rule.source == "calculated" and rule.column:
             columns = [part.strip() for part in rule.column.replace("|", ";").split(";") if part.strip()]
-            raw = ", ".join(normalize_text(row.get(column, "")) for column in columns if normalize_text(row.get(column, "")))
+            parts = [normalize_text(row.get(column, "")) for column in columns]
+            raw = ", ".join(part for part in parts if part)
         elif rule.source == "auto":
             raw = self._auto_value(field, profile)
         elif rule.source == "empty":
             raw = ""
         if is_empty(raw):
+            if isinstance(cache, dict):
+                cache[cache_key] = default
             return default
         try:
             value = apply_transformations(raw, rule.transformations)
         except ValueError:
             raise
-        return value if not is_empty(value) else default
+        result = value if not is_empty(value) else default
+        if isinstance(cache, dict):
+            cache[cache_key] = result
+        return result
 
     def _message_spec(self, kind: str, row: dict[str, Any], profile: MappingProfile, file_hash: str) -> MessageSpec:
         message_ref = self._explicit_identifier_value("message.message_ref_id", row, profile)
