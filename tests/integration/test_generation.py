@@ -93,24 +93,24 @@ def test_gera_crs_e_fatca_validos(tmp_path: Path) -> None:
     assert (tmp_path / "FATCA_teste.xml").exists()
 
 
-def test_crs_usa_apenas_linhas_usperson_true_quando_coluna_existe(tmp_path: Path) -> None:
+def test_fatca_usa_apenas_linhas_usperson_true_quando_coluna_existe(tmp_path: Path) -> None:
     headers = ["DocumentoCliente", "Tipo de documento", "NumConta", "NomeCliente", "SaldoTotal", "Endereco", "Cidade", "Pais", "USPerson"]
     profile = infer_default_profile(headers)
-    profile.output.crs_path = str(tmp_path / "crs_usperson.xml")
+    profile.output.fatca_path = str(tmp_path / "fatca_usperson.xml")
     rows = [
         {"DocumentoCliente": "06360698501", "Tipo de documento": "PF", "NumConta": "ACC-TRUE", "NomeCliente": "Cliente True", "SaldoTotal": "10", "Endereco": "Rua A", "Cidade": "Sao Paulo", "Pais": "BR", "USPerson": "true", "_excel_row": 2},
         {"DocumentoCliente": "09030562595", "Tipo de documento": "PF", "NumConta": "ACC-FALSE", "NomeCliente": "Cliente False", "SaldoTotal": "20", "Endereco": "Rua B", "Cidade": "Rio", "Pais": "BR", "USPerson": "false", "_excel_row": 3},
         {"DocumentoCliente": "16011329721", "Tipo de documento": "PF", "NumConta": "ACC-SIM", "NomeCliente": "Cliente Sim", "SaldoTotal": "30", "Endereco": "Rua C", "Cidade": "Curitiba", "Pais": "BR", "USPerson": "sim", "_excel_row": 4},
     ]
 
-    result = GenerationService(default_crs_schema(), default_fatca_schema()).generate(["crs"], rows, profile, Path("entrada.xlsx"), overwrite=True)[0]
+    result = GenerationService(default_crs_schema(), default_fatca_schema()).generate(["fatca"], rows, profile, Path("entrada.xlsx"), overwrite=True)[0]
 
     assert result.valid is True
-    assert result.summary["filtro_crs_usperson"] == "aplicado"
-    assert result.summary["linhas_crs_usadas"] == 2
-    assert result.summary["linhas_crs_ignoradas_por_usperson"] == 1
-    tree = etree.parse(str(tmp_path / "crs_usperson.xml"))
-    accounts = [item.text for item in tree.findall(f".//{{{CRS_NS}}}AccountNumber")]
+    assert result.summary["filtro_fatca_usperson"] == "aplicado"
+    assert result.summary["linhas_fatca_usadas"] == 2
+    assert result.summary["linhas_fatca_ignoradas_por_usperson"] == 1
+    tree = etree.parse(str(tmp_path / "fatca_usperson.xml"))
+    accounts = [item.text for item in tree.xpath(".//*[local-name()='AccountNumber']")]
     assert accounts == ["ACC-TRUE", "ACC-SIM"]
 
 
@@ -296,8 +296,12 @@ def test_fluxo_botao_simples_preserva_perfil_ditc_e_gera_arquivos(tmp_path: Path
         fatca = etree.parse(str(fatca_path))
         account_reports = crs.findall(f".//{{{CRS_NS}}}AccountReport")
         organisations = crs.findall(f".//{{{CRS_NS}}}AccountHolder/{{{CRS_NS}}}Organisation")
-        assert len(account_reports) == 0
-        assert len(organisations) == 0
+        fatca_account_reports = fatca.xpath(".//*[local-name()='AccountReport']")
+        assert len(account_reports) == 29
+        assert len(organisations) == 11
+        assert len(fatca_account_reports) == 0
+        assert sum(1 for org in organisations for item in org.findall(f"{{{CRS_NS}}}TIN") if item.get("issuedBy") == "BR") == 11
+        assert sum(1 for org in organisations for item in org.findall(f"{{{CRS_NS}}}IN") if item.get("issuedBy") == "BR") == 0
         assert crs.findtext(f".//{{{CRS_NS}}}ReportingFI/{{{CRS_NS}}}IN") == "FI107442"
         assert fatca.find(".//{urn:oecd:ties:fatca:v2}AccountHolder//{urn:oecd:ties:stffatcatypes:v2}TIN") is None
 

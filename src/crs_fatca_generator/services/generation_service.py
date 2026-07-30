@@ -65,16 +65,16 @@ class GenerationService:
         for kind in kinds:
             kind_name = kind.upper()
             kind_rows = prepared.rows
-            crs_usperson_summary: dict[str, int | str] = {}
-            if kind == "crs":
-                kind_rows, skipped_rows, filter_status = self._crs_rows_by_us_person(prepared.rows)
-                crs_usperson_summary = {
-                    "filtro_crs_usperson": filter_status,
-                    "linhas_crs_usadas": len(kind_rows),
-                    "linhas_crs_ignoradas_por_usperson": skipped_rows,
+            fatca_usperson_summary: dict[str, int | str] = {}
+            if kind == "fatca":
+                kind_rows, skipped_rows, filter_status = self._rows_by_us_person(prepared.rows)
+                fatca_usperson_summary = {
+                    "filtro_fatca_usperson": filter_status,
+                    "linhas_fatca_usadas": len(kind_rows),
+                    "linhas_fatca_ignoradas_por_usperson": skipped_rows,
                 }
                 if filter_status == "aplicado":
-                    self._emit_progress(progress_callback, "Filtrando CRS por USPerson", kind_name, len(kind_rows), len(prepared.rows), "")
+                    self._emit_progress(progress_callback, "Filtrando FATCA por USPerson", kind_name, len(kind_rows), len(prepared.rows), "")
             schema_path = self.crs_schema if kind == "crs" else self.fatca_schema
             self._emit_progress(progress_callback, "Carregando schema", kind_name, 0, 1, schema_path.name)
             enums = SchemaInspector().enums(schema_path)
@@ -86,7 +86,7 @@ class GenerationService:
 
             self._emit_progress(progress_callback, "Montando dados", kind_name, 0, len(kind_rows), "")
             report_rows = kind_rows
-            force_empty_accounts = kind == "crs" and not kind_rows and bool(prepared.rows)
+            force_empty_accounts = kind == "fatca" and not kind_rows and bool(prepared.rows)
             if force_empty_accounts:
                 report_rows = [prepared.rows[0]]
             report = self.mapping_service.build_report(kind, report_rows, profile, file_hash, progress_callback=mapping_progress)
@@ -103,7 +103,7 @@ class GenerationService:
                     ValidationIssue("erro", "OUT001", f"O arquivo ja existe: {output_path}", "saida", suggestion="Escolha outro nome ou confirme sobrescrita.")
                 )
             if any(issue.level == "erro" for issue in business_issues):
-                results.append(GenerationResult(kind, str(output_path), False, business_issues, {**self._summary(report, "nao gerado"), **audit_summary, **self._fiscal_summary(kind, profile), **crs_usperson_summary}))
+                results.append(GenerationResult(kind, str(output_path), False, business_issues, {**self._summary(report, "nao gerado"), **audit_summary, **self._fiscal_summary(kind, profile), **fatca_usperson_summary}))
                 continue
             accounts_total = max(len(getattr(report, "accounts", [])), 1)
 
@@ -140,7 +140,7 @@ class GenerationService:
                         **self._summary(report, "valido" if valid else "invalido"),
                         **audit_summary,
                         **self._fiscal_summary(kind, profile),
-                        **crs_usperson_summary,
+                        **fatca_usperson_summary,
                         "schema_hashes": ",".join(bundle.hashes.values()),
                         "arquivos_xml": "; ".join(xml_paths),
                         "quantidade_arquivos_xml": len(xml_paths),
@@ -229,7 +229,7 @@ class GenerationService:
             }
         return {"arquivo_teste": "nao", "status_fiscal": "conforme_politica_configurada"}
 
-    def _crs_rows_by_us_person(self, rows: list[dict[str, object]]) -> tuple[list[dict[str, object]], int, str]:
+    def _rows_by_us_person(self, rows: list[dict[str, object]]) -> tuple[list[dict[str, object]], int, str]:
         if not any(_usperson_value(row) is not None for row in rows):
             return rows, 0, "coluna_ausente"
         filtered = [row for row in rows if _is_true_value(_usperson_value(row))]
