@@ -18,7 +18,7 @@ class FatcaGenerator:
     ) -> etree._ElementTree:
         root = etree.Element(
             q(FATCA_NS, "FATCA_OECD"),
-            nsmap={None: FATCA_NS, "sfa": FATCA_SFA_NS, "stf": FATCA_STF_NS, "iso": FATCA_ISO_NS, "xsi": XSI_NS},
+            nsmap={"ftc": FATCA_NS, "sfa": FATCA_SFA_NS, "stf": FATCA_STF_NS, "iso": FATCA_ISO_NS, "xsi": XSI_NS},
             attrib={q(XSI_NS, "schemaLocation"): f"{FATCA_NS} {schema_location}", "version": "2.0"},
         )
         self._message_spec(root, report)
@@ -139,6 +139,10 @@ class FatcaGenerator:
         if address.legal_address_type:
             parent.set("legalAddressType", address.legal_address_type)
         add(parent, FATCA_SFA_NS, "CountryCode", address.country_code)
+        if address.legal_address_type:
+            address_fix = add(parent, FATCA_SFA_NS, "AddressFix")
+            add(address_fix, FATCA_SFA_NS, "City", _city_from_address(address.address_free))
+            return
         add(parent, FATCA_SFA_NS, "AddressFree", address.address_free)
 
     def _payment(self, parent: etree._Element, payment: Payment) -> None:
@@ -147,3 +151,8 @@ class FatcaGenerator:
         if payment.description:
             add(elem, FATCA_NS, "PaymentTypeDesc", payment.description)
         add(elem, FATCA_NS, "PaymentAmnt", payment.amount, {"currCode": payment.currency})
+
+
+def _city_from_address(value: str) -> str:
+    parts = [part.strip() for part in str(value or "").split(",") if part.strip()]
+    return parts[-1] if parts else "George Town"

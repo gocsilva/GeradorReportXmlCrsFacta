@@ -266,6 +266,36 @@ def test_nil_report_fatca_valido(tmp_path: Path) -> None:
     assert "NilReport" in (tmp_path / "FATCA_teste.xml").read_text(encoding="utf-8")
 
 
+def test_fatca_nil_report_usa_perfil_portal_e_crs_permanece_ditc(tmp_path: Path) -> None:
+    profile = build_sample_profile(tmp_path)
+    profile.output.fatca_nil_report = True
+
+    results = GenerationService(default_crs_schema(), default_fatca_schema()).generate(["crs", "fatca"], [{"_excel_row": 2}], profile, overwrite=True)
+
+    assert [result.valid for result in results] == [True, True]
+    fatca_text = (tmp_path / "FATCA_teste.xml").read_text(encoding="utf-8")
+    fatca = etree.parse(str(tmp_path / "FATCA_teste.xml"))
+    crs = etree.parse(str(tmp_path / "CRS_teste.xml"))
+    assert "<ftc:FATCA_OECD" in fatca_text
+    assert fatca.xpath("string(.//*[local-name()='MessageSpec']/*[local-name()='SendingCompanyIN'])") == "000000.00000.TA.136"
+    assert fatca.xpath("string(.//*[local-name()='MessageSpec']/*[local-name()='MessageRefId'])").startswith("000000.00000.TA.136.")
+    reporting_tins = [
+        (item.get("issuedBy"), item.text)
+        for item in fatca.xpath(".//*[local-name()='ReportingFI']/*[local-name()='TIN']")
+    ]
+    assert reporting_tins == [("US", "TBUHPP.00008.ME.136"), ("KY", "FI107442")]
+    assert fatca.xpath("string(.//*[local-name()='ReportingFI']/*[local-name()='FilerCategory'])") == "FATCA602"
+    assert fatca.xpath("string(.//*[local-name()='ReportingFI']/*[local-name()='Address']/*[local-name()='AddressFix']/*[local-name()='City'])") == "George Town"
+    assert fatca.xpath("count(.//*[local-name()='ReportingFI']/*[local-name()='Address']/*[local-name()='AddressFree'])") == 0
+    assert fatca.xpath("string(.//*[local-name()='ReportingFI']/*[local-name()='DocSpec']/*[local-name()='DocRefId'])").startswith("TBUHPP.00008.ME.136.")
+    assert fatca.xpath("string(.//*[local-name()='NilReport']/*[local-name()='DocSpec']/*[local-name()='DocRefId'])").startswith("TBUHPP.00008.ME.136.")
+    crs_text = (tmp_path / "CRS_teste.xml").read_text(encoding="utf-8")
+    assert "TBUHPP.00008.ME.136" not in crs_text
+    assert "000000.00000.TA.136" not in crs_text
+    assert crs.findtext(".//{urn:oecd:ties:crs:v3}MessageRefId").startswith("KY2025BRFI107442")
+    assert crs.findtext(".//{urn:oecd:ties:crs:v3}ReportingFI/{urn:oecd:ties:crs:v3}IN") == "FI107442"
+
+
 def test_fatca_nil_report_por_checkbox_ignora_account_report(tmp_path: Path) -> None:
     profile = build_sample_profile(tmp_path)
     profile.output.fatca_nil_report = True
@@ -306,6 +336,143 @@ def test_crs_controlling_person_valida(tmp_path: Path) -> None:
     results = GenerationService(default_crs_schema(), default_fatca_schema()).generate(["crs"], [{"_excel_row": 2}], profile, overwrite=True)
     assert results[0].valid is True
     assert "ControllingPerson" in (tmp_path / "CRS_teste.xml").read_text(encoding="utf-8")
+
+
+def test_crs_pj_sem_controlling_person_infere_crs102(tmp_path: Path) -> None:
+    profile = build_sample_profile(tmp_path)
+    profile.field_mappings["holder.kind"] = MappingRule("fixed", fixed_value="organisation")
+    profile.field_mappings["holder.organisation_name"] = MappingRule("fixed", fixed_value="Empresa Sem Controlador")
+
+    result = GenerationService(default_crs_schema(), default_fatca_schema()).generate(["crs"], [{"_excel_row": 2}], profile, overwrite=True)[0]
+
+    assert result.valid is True
+    crs = etree.parse(str(tmp_path / "CRS_teste.xml"))
+    assert crs.xpath("string(.//*[local-name()='AccountHolder']/*[local-name()='AcctHolderType'])") == "CRS102"
+    assert crs.xpath("count(.//*[local-name()='ControllingPerson'])") == 0
+
+
+def test_crs_pj_com_controlling_person_infere_crs101(tmp_path: Path) -> None:
+    profile = build_sample_profile(tmp_path)
+    profile.field_mappings["holder.kind"] = MappingRule("fixed", fixed_value="organisation")
+    profile.field_mappings["holder.organisation_name"] = MappingRule("fixed", fixed_value="Empresa Com Controlador")
+    profile.field_mappings["controlling.first_name"] = MappingRule("fixed", fixed_value="Maria")
+    profile.field_mappings["controlling.last_name"] = MappingRule("fixed", fixed_value="Souza")
+    profile.field_mappings["controlling.res_country"] = MappingRule("fixed", fixed_value="BR")
+    profile.field_mappings["controlling.address_country"] = MappingRule("fixed", fixed_value="BR")
+    profile.field_mappings["controlling.address_free"] = MappingRule("fixed", fixed_value="Rua C 3")
+
+    result = GenerationService(default_crs_schema(), default_fatca_schema()).generate(["crs"], [{"_excel_row": 2}], profile, overwrite=True)[0]
+
+    assert result.valid is True
+    crs = etree.parse(str(tmp_path / "CRS_teste.xml"))
+    assert crs.xpath("string(.//*[local-name()='AccountHolder']/*[local-name()='AcctHolderType'])") == "CRS101"
+    assert crs.xpath("count(.//*[local-name()='ControllingPerson'])") == 1
+
+
+def test_crs_pj_respeita_acct_holder_type_explicito_do_excel(tmp_path: Path) -> None:
+    profile = build_sample_profile(tmp_path)
+    profile.field_mappings["holder.kind"] = MappingRule("fixed", fixed_value="organisation")
+    profile.field_mappings["holder.organisation_name"] = MappingRule("fixed", fixed_value="Empresa Tipo Explicito")
+    profile.field_mappings["holder.acct_holder_type"] = MappingRule("column", "Account holder type", transformations=["code_prefix"])
+
+    result = GenerationService(default_crs_schema(), default_fatca_schema()).generate(
+        ["crs"],
+        [{"Account holder type": "CRS103 - Passive Non-Financial Entity that is a CRS Reportable Person", "_excel_row": 2}],
+        profile,
+        overwrite=True,
+    )[0]
+
+    assert result.valid is True
+    crs = etree.parse(str(tmp_path / "CRS_teste.xml"))
+    assert crs.xpath("string(.//*[local-name()='AccountHolder']/*[local-name()='AcctHolderType'])") == "CRS103"
+
+
+def test_crs_ids_seguem_padrao_oficial_sem_marcadores_internos(tmp_path: Path) -> None:
+    profile = build_sample_profile(tmp_path)
+    profile.grouping.account_key = "account"
+    profile.field_mappings["account.account_number"] = MappingRule("column", "account")
+    service = GenerationService(default_crs_schema(), default_fatca_schema())
+    service.mapping_service = MappingService(IdentifierStore(tmp_path / "ids.sqlite3"))
+
+    result = service.generate(
+        ["crs"],
+        [{"account": "A", "_excel_row": 2}, {"account": "B", "_excel_row": 3}],
+        profile,
+        overwrite=True,
+    )[0]
+
+    assert result.valid is True
+    crs = etree.parse(str(tmp_path / "CRS_teste.xml"))
+    message_ref = crs.findtext(".//{urn:oecd:ties:crs:v3}MessageRefId")
+    doc_refs = [item.text for item in crs.findall(".//{urn:oecd:ties:crsstf:v5}DocRefId")]
+    assert message_ref is not None
+    assert message_ref.startswith("KY2025BRFI107442FI")
+    assert doc_refs[0].startswith("KY2025BRFI107442FI")
+    assert all(item.startswith("KY2025BRFI107442") for item in doc_refs)
+    assert [message_ref[-10:], *[item[-10:] for item in doc_refs]] == ["KY25000001", "KY25000002", "KY25000003", "KY25000004"]
+    assert all(re.fullmatch(r"KY25\d{6}", item[-10:]) for item in [message_ref, *doc_refs])
+    assert len([message_ref, *doc_refs]) == len(set([message_ref, *doc_refs]))
+    assert not any("FIC" in item or "FICBR" in item for item in [message_ref, *doc_refs])
+
+
+def test_crs_document_reference_curto_do_excel_tem_maximo_dez_caracteres(tmp_path: Path) -> None:
+    profile = build_sample_profile(tmp_path)
+    profile.field_mappings["message.message_ref_id"] = MappingRule("column", "MessageUnique")
+    profile.field_mappings["reporting_fi.doc_ref_id"] = MappingRule("column", "FiUnique")
+    profile.field_mappings["account.doc_ref_id"] = MappingRule("column", "AccountUnique")
+
+    result = GenerationService(default_crs_schema(), default_fatca_schema()).generate(
+        ["crs"],
+        [{"MessageUnique": "KY25FI1074", "FiUnique": "KY25FI1075", "AccountUnique": "KY25AC1076", "_excel_row": 2}],
+        profile,
+        overwrite=True,
+    )[0]
+
+    assert result.valid is True
+    crs = etree.parse(str(tmp_path / "CRS_teste.xml"))
+    message_ref = crs.findtext(".//{urn:oecd:ties:crs:v3}MessageRefId")
+    doc_refs = [item.text for item in crs.findall(".//{urn:oecd:ties:crsstf:v5}DocRefId")]
+    assert message_ref == "KY2025BRFI107442FIKY25FI1074"
+    assert doc_refs[0] == "KY2025BRFI107442FIKY25FI1075"
+    assert doc_refs[1] == "KY2025BRFI107442KY25AC1076"
+
+
+def test_crs_document_reference_longo_do_excel_e_convertido_para_identificador_curto(tmp_path: Path) -> None:
+    profile = build_sample_profile(tmp_path)
+    profile.field_mappings["message.message_ref_id"] = MappingRule("column", "MessageUnique")
+    profile.field_mappings["reporting_fi.doc_ref_id"] = MappingRule("column", "FiUnique")
+    profile.field_mappings["account.doc_ref_id"] = MappingRule("column", "AccountUnique")
+
+    result = GenerationService(default_crs_schema(), default_fatca_schema()).generate(
+        ["crs"],
+        [{"MessageUnique": "KY2025BRFI107442001", "FiUnique": "KY2025BRFI107442002", "AccountUnique": "KY2025BRFI107442003", "_excel_row": 2}],
+        profile,
+        overwrite=True,
+    )[0]
+
+    assert result.valid is True
+    crs = etree.parse(str(tmp_path / "CRS_teste.xml"))
+    message_ref = crs.findtext(".//{urn:oecd:ties:crs:v3}MessageRefId")
+    doc_refs = [item.text for item in crs.findall(".//{urn:oecd:ties:crsstf:v5}DocRefId")]
+    assert message_ref == "KY2025BRFI107442FIKY25000001"
+    assert doc_refs[0] == "KY2025BRFI107442FIKY25000002"
+    assert doc_refs[1] == "KY2025BRFI107442KY25000003"
+
+
+def test_crs_account_balance_com_virgula_vira_decimal_com_ponto_no_xml(tmp_path: Path) -> None:
+    profile = build_sample_profile(tmp_path)
+    profile.field_mappings["account.balance"] = MappingRule("column", "Saldo")
+
+    result = GenerationService(default_crs_schema(), default_fatca_schema()).generate(
+        ["crs"],
+        [{"Saldo": "155,73", "_excel_row": 2}],
+        profile,
+        overwrite=True,
+    )[0]
+
+    assert result.valid is True
+    crs = etree.parse(str(tmp_path / "CRS_teste.xml"))
+    assert crs.findtext(".//{urn:oecd:ties:crs:v3}AccountBalance") == "155.73"
 
 
 def test_fatca_substantial_owner_valida(tmp_path: Path) -> None:

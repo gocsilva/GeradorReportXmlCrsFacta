@@ -22,7 +22,7 @@ class CrsGenerator:
     ) -> etree._ElementTree:
         root = etree.Element(
             q(CRS_NS, "CRS_OECD"),
-            nsmap={None: CRS_NS, "stf": CRS_STF_NS, "cfc": CRS_CFC_NS, "iso": CRS_ISO_NS, "ftc": CRS_FTCA_V1_NS, "xsi": XSI_NS},
+            nsmap={"crs": CRS_NS, "stf": CRS_STF_NS, "cfc": CRS_CFC_NS, "iso": CRS_ISO_NS, "ftc": CRS_FTCA_V1_NS, "xsi": XSI_NS},
             attrib={q(XSI_NS, "schemaLocation"): f"{CRS_NS} {schema_location}", "version": "3.0"},
         )
         self._message_spec(root, report)

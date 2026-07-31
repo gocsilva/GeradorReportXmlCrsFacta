@@ -90,6 +90,7 @@ class GenerationService:
                 }
                 if filter_status == "aplicado":
                     self._emit_progress(progress_callback, "Filtrando FATCA por USPerson", kind_name, len(kind_rows), len(prepared.rows), "")
+            self._clear_mapping_cache(kind_rows or prepared.rows)
             schema_path = self.crs_schema if kind == "crs" else self.fatca_schema
             self._emit_progress(progress_callback, "Carregando schema", kind_name, 0, 1, schema_path.name)
             enums = SchemaInspector().enums(schema_path)
@@ -209,6 +210,10 @@ class GenerationService:
         flush = getattr(self.mapping_service.identifier_store, "flush", None)
         if callable(flush):
             flush()
+
+    def _clear_mapping_cache(self, rows: list[dict[str, object]]) -> None:
+        for row in rows:
+            row.pop("_mapping_value_cache", None)
 
     def _summary(self, report: object, status: str) -> dict[str, int | str]:
         accounts = len(getattr(report, "accounts", []))

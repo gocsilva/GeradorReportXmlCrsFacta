@@ -43,3 +43,9 @@
 - Garante `ReportingFI/DocRefId` sequencial e unico por arquivo dividido, evitando duplicidade entre partes.
 - Aplica limpeza final obrigatoria antes de gravar qualquer XML, removendo tambem `>`, aspas e apostrofos do conteudo textual para evitar erro 422 do portal DITC.
 - Gera IDs DITC com token unico por execucao, evitando colisao com historico local e falha de ID unico em novas tentativas CRS/FATCA.
+- Alinha o FATCA nulo ao gerador oficial `FATCA_XML_Generator_Tool_v2.0.xlsm`: prefixo `ftc`, `SendingCompanyIN` da autoridade, GIIN/IN do `ReportingFI`, `FATCA602`, `AddressFix/City` e `MessageRefId`/`DocRefId` com GUID.
+- Alinha a serializacao CRS ao prefixo `crs` usado pelo gerador oficial, mantendo `ReportingFI/IN` e IDs DITC separados do FATCA.
+- Isola o cache de mapeamento entre CRS e FATCA para o fluxo simplificado gerar os dois XMLs na mesma execucao sem reaproveitar valores incorretos de um modelo no outro.
+- Ajusta PJ CRS: quando ha controlling person o app infere `AcctHolderType=CRS101`; quando nao ha controlling person e o Excel nao informa o tipo, infere `CRS102`; valores explicitos `CRS101/CRS102/CRS103` do Excel continuam sendo respeitados.
+- Alinha os IDs CRS ao padrao do gerador oficial: `MessageRefId` e `ReportingFI DocRefId` com sufixo `FI...`, `Account DocRefId` sem marcadores internos `FIC/FICBR`, todos compartilhando sequencia unica por execucao.
+- Simplifica o identificador unico CRS para no maximo 10 caracteres no estilo sequencial `KY25000001`, mantendo o XML final completo e sem duplicidade conforme a regra do gerador oficial.

@@ -26,7 +26,7 @@ def build_sample_profile(output_dir: Path) -> MappingProfile:
         "reporting_fi.address_country": "KY",
         "reporting_fi.address_free": "South Church Street, 103, 5TH Floor, POB 1353, KY1-1108, George Town",
         "reporting_fi.doc_type_indic": "OECD1",
-        "reporting_fi.filer_category": "FATCA601",
+        "reporting_fi.filer_category": "FATCA602",
         "account.doc_type_indic": "OECD1",
         "account.account_number": "ACC1",
         "account.balance": "1000,00",

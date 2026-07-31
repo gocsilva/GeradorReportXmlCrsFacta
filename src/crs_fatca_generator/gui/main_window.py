@@ -347,7 +347,7 @@ class MainWindow(QMainWindow):
             "reporting_fi.in": "FI107442",
             "reporting_fi.address_country": "KY",
             "reporting_fi.address_free": "South Church Street, 103, 5TH Floor, POB 1353, KY1-1108, George Town",
-            "reporting_fi.filer_category": "FATCA601",
+            "reporting_fi.filer_category": "FATCA602",
         }
         for field, default in defaults.items():
             edit = QLineEdit(default)

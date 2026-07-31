@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
@@ -23,7 +24,7 @@ from crs_fatca_generator.models.domain import (
 from crs_fatca_generator.models.mapping import MappingProfile, MappingRule, OutputConfig
 from crs_fatca_generator.services.controlling_person_service import ControllingPersonRecord
 from crs_fatca_generator.services.fatca_missing_tin_policy import DEFAULT_MISSING_US_TIN_POLICY, TECHNICAL_TEST_POLICY, FatcaMissingTinPolicy
-from .transformation_service import apply_transformations, country_code, currency_code, is_empty, normalize_text, split_values, to_bool, to_date, to_datetime, to_decimal
+from .transformation_service import apply_transformations, code_prefix, country_code, currency_code, is_empty, normalize_text, split_values, to_bool, to_date, to_datetime, to_decimal
 
 
 SIMPLE_REQUIRED_COLUMNS = [
@@ -50,6 +51,12 @@ SIMPLE_REQUIRED_ALIASES = {
 
 PROJECT_DEFAULT_CURRENCY = "USD"
 DITC_DEFAULT_PREFIX = "KY2025BRFI107442"
+FATCA_SENDING_COMPANY_IN = "000000.00000.TA.136"
+FATCA_REPORTING_US_TIN = "TBUHPP.00008.ME.136"
+FATCA_REPORTING_KY_TIN = "FI107442"
+FATCA_REPORTING_CITY = "George Town"
+FATCA_REPORTING_ADDRESS_TYPE = "OECD304"
+FATCA_REPORTING_FILER_CATEGORY = "FATCA602"
 
 logger = logging.getLogger(__name__)
 
@@ -136,9 +143,7 @@ class MappingService:
         return result
 
     def _message_spec(self, kind: str, row: dict[str, Any], profile: MappingProfile, file_hash: str) -> MessageSpec:
-        message_ref = self._explicit_identifier_value("message.message_ref_id", row, profile)
-        if not message_ref:
-            message_ref = self._new_id(f"{kind}-message", profile, file_hash)
+        message_ref = self._identifier_value(kind, "message.message_ref_id", row, profile, f"{kind}-message", file_hash)
         self.identifier_store.add(f"{kind}-message", message_ref, file_hash)
         reporting_period = self.value("message.reporting_period", row, profile)
         if reporting_period:
@@ -153,7 +158,7 @@ class MappingService:
         if kind == "fatca" and not nil_enabled and not warning and self.value("fatca.missing_us_tin_policy", row, profile, TECHNICAL_TEST_POLICY) == TECHNICAL_TEST_POLICY:
             warning = "ARQUIVO TECNICO DE TESTE: tratamento do US Tax ID pendente de confirmacao fiscal; nao usar para envio definitivo."
         return MessageSpec(
-            sending_company_in=self.value("message.sending_company_in", row, profile),
+            sending_company_in=self._message_value(kind, "sending_company_in", row, profile, FATCA_SENDING_COMPANY_IN if kind == "fatca" else ""),
             transmitting_country=country_code(self._message_value(kind, "transmitting_country", row, profile, "KY")),
             receiving_country=country_code(self._message_value(kind, "receiving_country", row, profile, "US" if kind == "fatca" else "BR")),
             message_type="FATCA" if kind == "fatca" else "CRS",
@@ -168,6 +173,28 @@ class MappingService:
 
     def _reporting_fi(self, kind: str, row: dict[str, Any], profile: MappingProfile, file_hash: str) -> ReportingFI:
         name = self.value("reporting_fi.name", row, profile, "Instituicao Financeira")
+        if kind == "fatca":
+            party = Party(
+                kind="organisation",
+                res_country_codes=split_values(self.value("fatca.reporting_fi.res_country", row, profile, "KY")),
+                name=Name(organisation_name=name),
+                address=Address(
+                    country_code=country_code(self.value("fatca.reporting_fi.address_country", row, profile, "KY")),
+                    address_free=self.value("fatca.reporting_fi.city", row, profile, FATCA_REPORTING_CITY),
+                    legal_address_type=self.value("fatca.reporting_fi.address_type", row, profile, FATCA_REPORTING_ADDRESS_TYPE),
+                ),
+                tins=[
+                    TIN(self.value("fatca.reporting_fi.us_tin", row, profile, FATCA_REPORTING_US_TIN), "US"),
+                    TIN(self.value("fatca.reporting_fi.ky_tin", row, profile, FATCA_REPORTING_KY_TIN), "KY"),
+                ],
+            )
+            doc_ref = self._explicit_identifier_value("reporting_fi.doc_ref_id", row, profile) or self._new_id(f"{kind}-fi-doc", profile, file_hash)
+            self.identifier_store.add(f"{kind}-fi-doc", doc_ref, file_hash)
+            return ReportingFI(
+                party,
+                DocSpec("FATCA1", doc_ref),
+                self.value("fatca.reporting_fi.filer_category", row, profile, FATCA_REPORTING_FILER_CATEGORY),
+            )
         party = Party(
             kind="organisation",
             res_country_codes=split_values(self.value("reporting_fi.res_country", row, profile, profile.identifier_config.country)),
@@ -186,7 +213,7 @@ class MappingService:
             else [],
         )
         doc_type = self._doc_type(kind, self.value("reporting_fi.doc_type_indic", row, profile, "FATCA1" if kind == "fatca" else "OECD1"))
-        doc_ref = self._explicit_identifier_value("reporting_fi.doc_ref_id", row, profile) or self._new_id(f"{kind}-fi-doc", profile, file_hash)
+        doc_ref = self._identifier_value(kind, "reporting_fi.doc_ref_id", row, profile, f"{kind}-fi-doc", file_hash)
         self.identifier_store.add(f"{kind}-fi-doc", doc_ref, file_hash)
         return ReportingFI(party, DocSpec(doc_type, doc_ref), self.value("reporting_fi.filer_category", row, profile, "FATCA601"))
 
@@ -210,7 +237,7 @@ class MappingService:
             if progress_callback and (index == 1 or index % 50 == 0 or index == total):
                 progress_callback(index, total, row)
             doc_type = self._doc_type(kind, self.value("account.doc_type_indic", row, profile, "FATCA1" if kind == "fatca" else "OECD1"))
-            doc_ref = self._explicit_identifier_value("account.doc_ref_id", row, profile) or self._new_id(f"{kind}-account-doc", profile, file_hash)
+            doc_ref = self._identifier_value(kind, "account.doc_ref_id", row, profile, f"{kind}-account-doc", file_hash)
             self.identifier_store.add(f"{kind}-account-doc", doc_ref, file_hash)
             account = AccountReport(
                 doc_spec=DocSpec(doc_type, doc_ref),
@@ -236,7 +263,7 @@ class MappingService:
         tin_issued_by = country_code(self.value("holder.tin_issued_by", row, profile, str(row.get("_tax_identifier_issued_by", "BR"))))
         fatca_tin_decision = FatcaMissingTinPolicy().decide_xml_representation(row, profile) if kind == "fatca" else None
         tins = fatca_tin_decision.tins if fatca_tin_decision else [TIN(v, tin_issued_by) for v in split_values(self.value("holder.tin", row, profile))]
-        acct_holder_type = self.value("holder.acct_holder_type", row, profile, "CRS101" if kind == "crs" else "FATCA101")
+        acct_holder_type = self._acct_holder_type(kind, row, profile, is_org)
         if kind == "fatca" and acct_holder_type.startswith("CRS"):
             acct_holder_type = "FATCA101"
         return Party(
@@ -267,6 +294,21 @@ class MappingService:
             acct_holder_type=acct_holder_type,
             crs_self_cert=self.value("holder.crs_self_cert", row, profile, "CRS901"),
         )
+
+    def _acct_holder_type(self, kind: str, row: dict[str, Any], profile: MappingProfile, is_org: bool) -> str:
+        if kind == "fatca":
+            return code_prefix(self.value("holder.acct_holder_type", row, profile, "FATCA101")) or "FATCA101"
+        if not is_org:
+            return ""
+        explicit = code_prefix(self.value("holder.acct_holder_type", row, profile))
+        if explicit:
+            return explicit
+        return "CRS101" if self._has_controlling_persons(row, profile) else "CRS102"
+
+    def _has_controlling_persons(self, row: dict[str, Any], profile: MappingProfile) -> bool:
+        if any(isinstance(record, ControllingPersonRecord) for record in row.get("_controlling_persons", [])):
+            return True
+        return bool(self.value("controlling.first_name", row, profile) or self.value("controlling.last_name", row, profile))
 
     def _payments(self, kind: str, rows: list[dict[str, Any]], profile: MappingProfile) -> list[Payment]:
         payments: list[Payment] = []
@@ -377,6 +419,8 @@ class MappingService:
         kind_field = f"{kind}.message.{name}"
         if kind_field in profile.field_mappings:
             return self.value(kind_field, row, profile, default)
+        if kind == "fatca" and name in {"sending_company_in", "receiving_country"}:
+            return default
         if name == "receiving_country":
             return default
         return self.value(f"message.{name}", row, profile, default)
@@ -409,17 +453,33 @@ class MappingService:
             return ""
         return self.value(field, row, profile)
 
+    def _identifier_value(self, kind: str, field: str, row: dict[str, Any], profile: MappingProfile, sequence_kind: str, file_hash: str) -> str:
+        explicit = self._explicit_identifier_value(field, row, profile)
+        if not kind.startswith("crs"):
+            return explicit or self._new_id(sequence_kind, profile, file_hash)
+        if explicit:
+            return self._crs_identifier_from_short(sequence_kind, profile, explicit)
+        return self._new_id(sequence_kind, profile, file_hash)
+
     def _new_id(self, kind: str, profile: MappingProfile, file_hash: str) -> str:
         prefix = profile.identifier_config.prefix or DITC_DEFAULT_PREFIX
         country = profile.identifier_config.country or "BR"
         if prefix.strip().upper() == "AUTO":
             prefix = DITC_DEFAULT_PREFIX
+        if kind.startswith("fatca"):
+            for _ in range(100):
+                value = self._fatca_portal_id(kind)
+                if not self.identifier_store.exists(kind, value):
+                    logger.info("TRACE_BUTTON_PIPELINE MappingService._new_id kind=%s generator=FATCA_PORTAL_UUID value=%s", kind, value)
+                    return value
+            raise RuntimeError("Nao foi possivel gerar identificador FATCA unico.")
         if not profile.identifier_config.use_uuid:
-            start = self._sequence_next.get(kind, 1)
+            sequence_key = "crs-all" if kind.startswith("crs") else kind
+            start = self._sequence_next.get(sequence_key, 1)
             for sequence in range(start, 1_000_000):
                 value = self._ditc_sequence_id(kind, prefix, country, sequence)
                 if not self.identifier_store.exists(kind, value):
-                    self._sequence_next[kind] = sequence + 1
+                    self._sequence_next[sequence_key] = sequence + 1
                     logger.info("TRACE_BUTTON_PIPELINE MappingService._new_id kind=%s generator=DITC_SEQUENCE value=%s", kind, value)
                     return value
             raise RuntimeError("Nao foi possivel gerar identificador sequencial unico.")
@@ -430,10 +490,16 @@ class MappingService:
                 return value
         raise RuntimeError("Nao foi possivel gerar identificador unico.")
 
+    def _fatca_portal_id(self, kind: str) -> str:
+        base = FATCA_SENDING_COMPANY_IN if "message" in kind else FATCA_REPORTING_US_TIN
+        return f"{base}.{str(uuid4()).upper()}"
+
     def _ditc_sequence_id(self, kind: str, prefix: str, country: str, sequence: int) -> str:
         clean_prefix = "".join(char for char in prefix if char.isalnum())
         clean_country = "".join(char for char in country if char.isalnum())[:2] or "BR"
         kind_code = "F" if kind.startswith("fatca") else "C" if kind.startswith("crs") else "X"
+        if kind.startswith("crs"):
+            return self._crs_identifier_from_short(kind, profile=None, short_id=self._crs_short_identifier(kind, clean_prefix, sequence), clean_prefix=clean_prefix)
         if "message" in kind:
             return f"{clean_prefix}{kind_code}{self._run_token}{sequence:06d}"
         if "fi-doc" in kind:
@@ -443,6 +509,37 @@ class MappingService:
         if "nil" in kind:
             return f"{clean_prefix}{kind_code}NIL{self._run_token}{sequence:06d}"
         return f"{clean_prefix}{kind_code}{self._run_token}{sequence:06d}"
+
+    def _crs_identifier_from_short(self, kind: str, profile: MappingProfile | None, short_id: str, clean_prefix: str | None = None) -> str:
+        prefix = clean_prefix or "".join(char for char in (profile.identifier_config.prefix if profile else DITC_DEFAULT_PREFIX) if char.isalnum())
+        short = self._clean_crs_short_identifier(short_id, kind)
+        if "message" in kind or "fi-doc" in kind:
+            return f"{prefix}FI{short}"
+        if "account-doc" in kind:
+            return f"{prefix}{short}"
+        if "nil" in kind:
+            return f"{prefix}NIL{short}"
+        return f"{prefix}{short}"
+
+    def _clean_crs_short_identifier(self, value: str, kind: str) -> str:
+        cleaned = "".join(char for char in normalize_text(value).upper() if char.isalnum())
+        if not cleaned:
+            return "KY25ID0001"
+        if len(cleaned) <= 10:
+            return cleaned
+        match = re.search(r"20(\d{2})", cleaned)
+        year = match.group(1) if match else f"{datetime.now().year % 100:02d}"
+        code = "FI" if "message" in kind or "fi-doc" in kind else "AC" if "account-doc" in kind else "ID"
+        sequence_match = re.search(r"FI\d{6}(\d{1,4})$", cleaned) or re.search(r"(\d{1,4})$", cleaned)
+        sequence = (sequence_match.group(1) if sequence_match else "1").rjust(6, "0")[-6:]
+        if cleaned.startswith("KY") and code in {"FI", "AC"}:
+            return f"KY{year}{sequence}"
+        return f"KY{year}{code}{sequence[-4:]}"
+
+    def _crs_short_identifier(self, kind: str, clean_prefix: str, sequence: int) -> str:
+        match = re.search(r"20(\d{2})", clean_prefix)
+        year = match.group(1) if match else f"{datetime.now().year % 100:02d}"
+        return f"KY{year}{sequence:06d}"
 
 
 
@@ -478,6 +575,8 @@ def infer_default_profile(headers: list[str]) -> MappingProfile:
         match = next((lower[name] for name in names if name in lower), "")
         if match:
             profile.field_mappings[field] = MappingRule("column", match)
+    if "holder.acct_holder_type" in profile.field_mappings:
+        profile.field_mappings["holder.acct_holder_type"].transformations = ["code_prefix"]
 
     if "nomecliente" in lower:
         profile.field_mappings["holder.first_name"] = MappingRule("column", lower["nomecliente"], transformations=["first_name"])
@@ -530,7 +629,7 @@ def infer_default_profile(headers: list[str]) -> MappingProfile:
         "reporting_fi.address_country": "KY",
         "reporting_fi.address_free": "South Church Street, 103, 5TH Floor, POB 1353, KY1-1108, George Town",
         "reporting_fi.doc_type_indic": "OECD1",
-        "reporting_fi.filer_category": "FATCA601",
+        "reporting_fi.filer_category": FATCA_REPORTING_FILER_CATEGORY,
         "account.doc_type_indic": "OECD1",
         "holder.crs_self_cert": "CRS901",
         "account.crs_dd_procedure": "CRS1201",
