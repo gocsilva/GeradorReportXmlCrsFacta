@@ -94,6 +94,41 @@ def test_gera_crs_e_fatca_validos(tmp_path: Path) -> None:
     assert (tmp_path / "FATCA_teste.xml").exists()
 
 
+def test_geracao_remove_caracteres_rejeitados_pelo_portal(tmp_path: Path) -> None:
+    profile = infer_default_profile(["DocumentoCliente", "Tipo de documento", "NumConta", "NomeCliente", "SaldoTotal", "Endereco", "Cidade", "Pais", "USPerson"])
+    profile.output.crs_path = str(tmp_path / "portal_CRS.xml")
+    profile.output.fatca_path = str(tmp_path / "portal_FATCA.xml")
+    row = {
+        "DocumentoCliente": "06360698501",
+        "Tipo de documento": "PF",
+        "NumConta": "ACC-PORTAL",
+        "NomeCliente": "Cliente & <Teste> ' \" -- /* &#",
+        "SaldoTotal": "10",
+        "Endereco": "Rua HÃƒÂ©lio & <A> -- /* &#",
+        "Cidade": "JoÃƒÂ£o Pessoa > ' \"",
+        "Pais": "BR",
+        "USPerson": "true",
+        "_excel_row": 2,
+    }
+
+    results = GenerationService(default_crs_schema(), default_fatca_schema()).generate(["crs", "fatca"], [row], profile, Path("entrada.xlsx"), overwrite=True)
+
+    assert [result.valid for result in results] == [True, True]
+    for path in (tmp_path / "portal_CRS.xml", tmp_path / "portal_FATCA.xml"):
+        tree = etree.parse(str(path))
+        text_values = [value for value in tree.xpath(".//text()") if value.strip()]
+        joined = "\n".join(text_values)
+        assert "&" not in joined
+        assert "<" not in joined
+        assert ">" not in joined
+        assert "'" not in joined
+        assert '"' not in joined
+        assert "--" not in joined
+        assert "/*" not in joined
+        assert "&#" not in joined
+        assert joined.isascii()
+
+
 def test_fatca_usa_apenas_linhas_usperson_true_quando_coluna_existe(tmp_path: Path) -> None:
     headers = ["DocumentoCliente", "Tipo de documento", "NumConta", "NomeCliente", "SaldoTotal", "Endereco", "Cidade", "Pais", "USPerson"]
     profile = infer_default_profile(headers)

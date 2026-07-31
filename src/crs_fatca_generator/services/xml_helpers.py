@@ -26,6 +26,9 @@ PORTAL_PROHIBITED_TEXT_PATTERNS = (
     ("&#", ""),
     ("&", " e "),
     ("<", " "),
+    (">", " "),
+    ("'", ""),
+    ('"', ""),
     ("--", "-"),
     ("/*", "/"),
 )
@@ -50,6 +53,16 @@ def sanitize_xml_text(value: object) -> str:
         text = text.replace(pattern, replacement)
     text = _ascii_only(text)
     return re.sub(r"\s+", " ", text).strip()
+
+
+def sanitize_xml_tree(root: etree._Element) -> None:
+    for element in root.iter():
+        if element.text and element.text.strip():
+            element.text = sanitize_xml_text(element.text)
+        if element.tail and element.tail.strip():
+            element.tail = sanitize_xml_text(element.tail)
+        for key, value in list(element.attrib.items()):
+            element.set(key, sanitize_xml_text(value))
 
 
 def strip_invalid_xml_chars(value: str) -> str:
@@ -97,6 +110,7 @@ def _is_discouraged_xml_10_char(char: str) -> bool:
 
 def atomic_write(tree: etree._ElementTree, output_path: Path, pretty_print: bool = True) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    sanitize_xml_tree(tree.getroot())
     fd, temp_name = tempfile.mkstemp(prefix=output_path.name, suffix=".tmp", dir=output_path.parent)
     os.close(fd)
     temp_path = Path(temp_name)

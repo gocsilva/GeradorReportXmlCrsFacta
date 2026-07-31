@@ -5,7 +5,7 @@ from pathlib import Path
 
 from lxml import etree
 
-from crs_fatca_generator.services.xml_helpers import atomic_write, sanitize_xml_text, strip_invalid_xml_chars
+from crs_fatca_generator.services.xml_helpers import atomic_write, sanitize_xml_text, sanitize_xml_tree, strip_invalid_xml_chars
 
 
 @dataclass
@@ -61,3 +61,4 @@ class XmlSanitizerService:
                 if cleaned != value:
                     element.set(key, cleaned)
                     result.attributes_changed += 1
+        sanitize_xml_tree(root)
