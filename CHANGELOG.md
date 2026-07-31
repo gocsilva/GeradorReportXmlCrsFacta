@@ -42,3 +42,4 @@
 - Converte textos do XML para ASCII seguro, corrigindo mojibake comum (`HÃ©lio` -> `Helio`) e removendo acentos/caracteres nao ASCII.
 - Garante `ReportingFI/DocRefId` sequencial e unico por arquivo dividido, evitando duplicidade entre partes.
 - Aplica limpeza final obrigatoria antes de gravar qualquer XML, removendo tambem `>`, aspas e apostrofos do conteudo textual para evitar erro 422 do portal DITC.
+- Gera IDs DITC com token unico por execucao, evitando colisao com historico local e falha de ID unico em novas tentativas CRS/FATCA.

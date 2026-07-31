@@ -13,6 +13,7 @@ from lxml import etree
 from crs_fatca_generator.app import build_sample_profile
 from crs_fatca_generator.app import generate_from_excel
 from crs_fatca_generator.infrastructure import paths as path_config
+from crs_fatca_generator.infrastructure.database import IdentifierStore
 from crs_fatca_generator.infrastructure.paths import default_crs_schema, default_fatca_schema
 from crs_fatca_generator.models.mapping import MappingRule
 from crs_fatca_generator.services.crs_generator import CrsGenerator
@@ -92,6 +93,30 @@ def test_gera_crs_e_fatca_validos(tmp_path: Path) -> None:
     assert [result.valid for result in results] == [True, True]
     assert (tmp_path / "CRS_teste.xml").exists()
     assert (tmp_path / "FATCA_teste.xml").exists()
+
+
+def test_geracao_crs_e_fatca_repetida_nao_colide_com_historico_local(tmp_path: Path) -> None:
+    store = IdentifierStore(tmp_path / "identifiers.sqlite3")
+    profile = build_sample_profile(tmp_path)
+    rows = [{"_excel_row": 2}]
+
+    first_service = GenerationService(default_crs_schema(), default_fatca_schema())
+    first_service.mapping_service = MappingService(store)
+    first = first_service.generate(["crs", "fatca"], rows, profile, Path("entrada.xlsx"), overwrite=True)
+
+    second_service = GenerationService(default_crs_schema(), default_fatca_schema())
+    second_service.mapping_service = MappingService(store)
+    second = second_service.generate(["crs", "fatca"], rows, profile, Path("entrada.xlsx"), overwrite=True)
+
+    assert [result.valid for result in first] == [True, True]
+    assert [result.valid for result in second] == [True, True]
+    assert (tmp_path / "CRS_teste.xml").exists()
+    assert (tmp_path / "FATCA_teste.xml").exists()
+    tree = etree.parse(str(tmp_path / "CRS_teste.xml"))
+    identifiers = tree.xpath(".//*[local-name()='MessageRefId' or local-name()='DocRefId']/text()")
+    assert identifiers
+    assert len(identifiers) == len(set(identifiers))
+    assert all(value.isalnum() for value in identifiers)
 
 
 def test_geracao_remove_caracteres_rejeitados_pelo_portal(tmp_path: Path) -> None:

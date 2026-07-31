@@ -78,6 +78,7 @@ class MappingService:
     def __init__(self, identifier_store: IdentifierStore | None = None) -> None:
         self.identifier_store = identifier_store or IdentifierStore()
         self._sequence_next: dict[str, int] = {}
+        self._run_token = f"{datetime.now():%y%m%d%H%M%S}{uuid4().hex[:4].upper()}"
 
     def build_report(
         self,
@@ -414,7 +415,7 @@ class MappingService:
         if prefix.strip().upper() == "AUTO":
             prefix = DITC_DEFAULT_PREFIX
         if not profile.identifier_config.use_uuid:
-            start = self._sequence_next.get(kind, 0)
+            start = self._sequence_next.get(kind, 1)
             for sequence in range(start, 1_000_000):
                 value = self._ditc_sequence_id(kind, prefix, country, sequence)
                 if not self.identifier_store.exists(kind, value):
@@ -434,14 +435,14 @@ class MappingService:
         clean_country = "".join(char for char in country if char.isalnum())[:2] or "BR"
         kind_code = "F" if kind.startswith("fatca") else "C" if kind.startswith("crs") else "X"
         if "message" in kind:
-            return f"{clean_prefix}{kind_code}{sequence:03d}"
+            return f"{clean_prefix}{kind_code}{self._run_token}{sequence:06d}"
         if "fi-doc" in kind:
-            return f"{clean_prefix}FI{kind_code}I107442{sequence:03d}"
+            return f"{clean_prefix}FI{kind_code}I107442{self._run_token}{sequence:06d}"
         if "account-doc" in kind:
-            return f"{clean_prefix}FI{kind_code}{clean_country}107442{sequence:03d}"
+            return f"{clean_prefix}FI{kind_code}{clean_country}107442{self._run_token}{sequence:06d}"
         if "nil" in kind:
-            return f"{clean_prefix}{kind_code}NIL{sequence:03d}"
-        return f"{clean_prefix}{kind_code}{sequence:03d}"
+            return f"{clean_prefix}{kind_code}NIL{self._run_token}{sequence:06d}"
+        return f"{clean_prefix}{kind_code}{self._run_token}{sequence:06d}"
 
 
 
