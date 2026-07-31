@@ -95,6 +95,23 @@ def test_gera_crs_e_fatca_validos(tmp_path: Path) -> None:
     assert (tmp_path / "FATCA_teste.xml").exists()
 
 
+def test_crs_forcado_no_schema_v2(tmp_path: Path) -> None:
+    profile = build_sample_profile(tmp_path)
+    result = GenerationService(default_crs_schema(), default_fatca_schema()).generate(["crs"], [{"_excel_row": 2}], profile, overwrite=True)[0]
+
+    assert result.valid is True
+    tree = etree.parse(str(tmp_path / "CRS_teste.xml"))
+    root = tree.getroot()
+    raw_xml = (tmp_path / "CRS_teste.xml").read_text(encoding="utf-8")
+    assert etree.QName(root).namespace == "urn:oecd:ties:crs:v2"
+    assert root.get("version") == "2.0"
+    assert root.get("{http://www.w3.org/2001/XMLSchema-instance}schemaLocation") == "urn:oecd:ties:crs:v2 CrsXML_v2.0.xsd"
+    assert "urn:oecd:ties:crs:v3" not in raw_xml
+    assert "CrsXML_v3.0.xsd" not in raw_xml
+    for v3_only in ("SelfCert", "DDProcedure", "AccountType", "JointAccount", "EquityInterestType"):
+        assert tree.xpath(f"//*[local-name()='{v3_only}']") == []
+
+
 def test_geracao_crs_e_fatca_repetida_nao_colide_com_historico_local(tmp_path: Path) -> None:
     store = IdentifierStore(tmp_path / "identifiers.sqlite3")
     profile = build_sample_profile(tmp_path)
@@ -201,7 +218,7 @@ def test_crs_remove_caracteres_invalidos_de_todos_os_textos_gravados(tmp_path: P
             if local_name in {"schemaLocation", "version"}:
                 continue
             assert re.fullmatch(r"[A-Za-z0-9]+", value), (local_name, value)
-    assert tree.findtext(".//{urn:oecd:ties:crs:v3}AccountBalance") == "155.73"
+    assert tree.findtext(f".//{{{CRS_NS}}}AccountBalance") == "155.73"
 
 
 def test_fatca_usa_apenas_linhas_usperson_true_quando_coluna_existe(tmp_path: Path) -> None:
@@ -342,8 +359,8 @@ def test_fatca_nil_report_usa_perfil_portal_e_crs_permanece_ditc(tmp_path: Path)
     crs_text = (tmp_path / "CRS_teste.xml").read_text(encoding="utf-8")
     assert "TBUHPP.00008.ME.136" not in crs_text
     assert "000000.00000.TA.136" not in crs_text
-    assert crs.findtext(".//{urn:oecd:ties:crs:v3}MessageRefId").startswith("KY2025BRFI107442")
-    assert crs.findtext(".//{urn:oecd:ties:crs:v3}ReportingFI/{urn:oecd:ties:crs:v3}IN") == "FI107442"
+    assert crs.findtext(f".//{{{CRS_NS}}}MessageRefId").startswith("KY2025BRFI107442")
+    assert crs.findtext(f".//{{{CRS_NS}}}ReportingFI/{{{CRS_NS}}}IN") == "FI107442"
 
 
 def test_fatca_nil_report_por_checkbox_ignora_account_report(tmp_path: Path) -> None:
@@ -453,7 +470,7 @@ def test_crs_ids_seguem_padrao_oficial_sem_marcadores_internos(tmp_path: Path) -
 
     assert result.valid is True
     crs = etree.parse(str(tmp_path / "CRS_teste.xml"))
-    message_ref = crs.findtext(".//{urn:oecd:ties:crs:v3}MessageRefId")
+    message_ref = crs.findtext(f".//{{{CRS_NS}}}MessageRefId")
     doc_refs = [item.text for item in crs.findall(".//{urn:oecd:ties:crsstf:v5}DocRefId")]
     assert message_ref is not None
     assert message_ref.startswith("KY2025BRFI107442FI")
@@ -480,7 +497,7 @@ def test_crs_document_reference_curto_do_excel_tem_maximo_dez_caracteres(tmp_pat
 
     assert result.valid is True
     crs = etree.parse(str(tmp_path / "CRS_teste.xml"))
-    message_ref = crs.findtext(".//{urn:oecd:ties:crs:v3}MessageRefId")
+    message_ref = crs.findtext(f".//{{{CRS_NS}}}MessageRefId")
     doc_refs = [item.text for item in crs.findall(".//{urn:oecd:ties:crsstf:v5}DocRefId")]
     assert message_ref == "KY2025BRFI107442FIKY25FI1074"
     assert doc_refs[0] == "KY2025BRFI107442FIKY25FI1075"
@@ -502,7 +519,7 @@ def test_crs_document_reference_longo_do_excel_e_convertido_para_identificador_c
 
     assert result.valid is True
     crs = etree.parse(str(tmp_path / "CRS_teste.xml"))
-    message_ref = crs.findtext(".//{urn:oecd:ties:crs:v3}MessageRefId")
+    message_ref = crs.findtext(f".//{{{CRS_NS}}}MessageRefId")
     doc_refs = [item.text for item in crs.findall(".//{urn:oecd:ties:crsstf:v5}DocRefId")]
     assert message_ref == "KY2025BRFI107442FIKY25000001"
     assert doc_refs[0] == "KY2025BRFI107442FIKY25000002"
@@ -522,7 +539,7 @@ def test_crs_account_balance_com_virgula_vira_decimal_com_ponto_no_xml(tmp_path:
 
     assert result.valid is True
     crs = etree.parse(str(tmp_path / "CRS_teste.xml"))
-    assert crs.findtext(".//{urn:oecd:ties:crs:v3}AccountBalance") == "155.73"
+    assert crs.findtext(f".//{{{CRS_NS}}}AccountBalance") == "155.73"
 
 
 def test_fatca_substantial_owner_valida(tmp_path: Path) -> None:
@@ -560,17 +577,17 @@ def test_exemplos_dados_autoconfiguram_e_validam(tmp_path: Path) -> None:
     assert profile.field_mappings["holder.address_free"].source == "calculated"
     crs = etree.parse(str(tmp_path / "exemplos_crs.xml"))
     fatca = etree.parse(str(tmp_path / "exemplos_fatca.xml"))
-    assert crs.findtext(".//{urn:oecd:ties:crs:v3}TransmittingCountry") == "KY"
-    assert crs.findtext(".//{urn:oecd:ties:crs:v3}ReceivingCountry") == "BR"
+    assert crs.findtext(f".//{{{CRS_NS}}}TransmittingCountry") == "KY"
+    assert crs.findtext(f".//{{{CRS_NS}}}ReceivingCountry") == "BR"
     assert fatca.findtext(".//{urn:oecd:ties:stffatcatypes:v2}TransmittingCountry") == "KY"
     assert fatca.findtext(".//{urn:oecd:ties:stffatcatypes:v2}ReceivingCountry") == "US"
-    assert crs.findtext(".//{urn:oecd:ties:crs:v3}MessageRefId").startswith("KY2025BRFI107442")
-    assert "-" not in crs.findtext(".//{urn:oecd:ties:crs:v3}MessageRefId")
+    assert crs.findtext(f".//{{{CRS_NS}}}MessageRefId").startswith("KY2025BRFI107442")
+    assert "-" not in crs.findtext(f".//{{{CRS_NS}}}MessageRefId")
     crs_doc_refs = [item.text for item in crs.findall(".//{urn:oecd:ties:crsstf:v5}DocRefId")]
     assert len(crs_doc_refs) == len(set(crs_doc_refs))
-    assert all(item.get("currCode") == "USD" for item in crs.findall(".//{urn:oecd:ties:crs:v3}AccountBalance"))
+    assert all(item.get("currCode") == "USD" for item in crs.findall(f".//{{{CRS_NS}}}AccountBalance"))
     assert all(item.get("currCode") == "USD" for item in fatca.findall(".//{urn:oecd:ties:fatca:v2}AccountBalance"))
-    assert all(not (item.text or "").startswith("-") for item in crs.findall(".//{urn:oecd:ties:crs:v3}AccountBalance"))
+    assert all(not (item.text or "").startswith("-") for item in crs.findall(f".//{{{CRS_NS}}}AccountBalance"))
     assert (tmp_path / f"{excel_path.stem}_relatorio_auditoria.csv").exists()
     assert (tmp_path / f"{excel_path.stem}_relatorio_auditoria.xlsx").exists()
 
@@ -640,8 +657,8 @@ def test_fluxo_botao_simples_preserva_perfil_ditc_e_gera_arquivos(tmp_path: Path
         assert len(account_reports) == 29
         assert len(organisations) == 11
         assert len(fatca_account_reports) == 0
-        assert sum(1 for org in organisations for item in org.findall(f"{{{CRS_NS}}}TIN") if item.get("issuedBy") == "BR") == 11
-        assert sum(1 for org in organisations for item in org.findall(f"{{{CRS_NS}}}IN") if item.get("issuedBy") == "BR") == 0
+        assert sum(1 for org in organisations for item in org.findall(f"{{{CRS_NS}}}IN") if item.get("issuedBy") == "BR") == 11
+        assert sum(1 for org in organisations for item in org.findall(f"{{{CRS_NS}}}TIN") if item.get("issuedBy") == "BR") == 0
         assert crs.findtext(f".//{{{CRS_NS}}}ReportingFI/{{{CRS_NS}}}IN") == "FI107442"
         assert fatca.find(".//{urn:oecd:ties:fatca:v2}AccountHolder//{urn:oecd:ties:stffatcatypes:v2}TIN") is None
 
@@ -1217,12 +1234,12 @@ def test_xml_invalido_e_reportado_pelo_xsd(tmp_path: Path) -> None:
     assert issues[0].code == "XSD"
 
 
-def test_crs_xsd_embarcado_permite_tin_para_titular_pj_sem_remover_in() -> None:
+def test_crs_xsd_embarcado_v2_usa_in_para_titular_pj() -> None:
     schema_text = default_crs_schema().read_text(encoding="utf-8")
     start = schema_text.index('name="OrganisationParty_Type"')
     block = schema_text[start : schema_text.index('name="CorrectableOrganisationParty_Type"', start)]
     assert 'name="IN"' in block
-    assert 'name="TIN"' in block
+    assert 'name="TIN"' not in block
 
 
 def test_fluxo_simples_gera_ao_lado_do_excel(tmp_path: Path) -> None:

@@ -13,7 +13,7 @@ from crs_fatca_generator.security.masking import remove_control_chars
 
 
 XSI_NS = "http://www.w3.org/2001/XMLSchema-instance"
-CRS_NS = "urn:oecd:ties:crs:v3"
+CRS_NS = "urn:oecd:ties:crs:v2"
 CRS_STF_NS = "urn:oecd:ties:crsstf:v5"
 CRS_CFC_NS = "urn:oecd:ties:commontypesfatcacrs:v2"
 CRS_ISO_NS = "urn:oecd:ties:isocrstypes:v1"

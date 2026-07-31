@@ -50,3 +50,4 @@
 - Alinha os IDs CRS ao padrao do gerador oficial: `MessageRefId` e `ReportingFI DocRefId` com sufixo `FI...`, `Account DocRefId` sem marcadores internos `FIC/FICBR`, todos compartilhando sequencia unica por execucao.
 - Simplifica o identificador unico CRS para no maximo 10 caracteres no estilo sequencial `KY25000001`, mantendo o XML final completo e sem duplicidade conforme a regra do gerador oficial.
 - Endurece a limpeza de textos CRS por allowlist: campos textuais livres agora aceitam somente letras, numeros e espaco; formatos tecnicos de data, timestamp e decimal sao preservados para manter o XSD valido.
+- Forca a geracao CRS no schema XML v2: namespace `urn:oecd:ties:crs:v2`, `version="2.0"`, `CrsXML_v2.0.xsd` e remocao dos elementos exclusivos do CRS v3.

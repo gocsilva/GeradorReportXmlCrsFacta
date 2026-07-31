@@ -17,13 +17,13 @@ class CrsGenerator:
     def build_tree(
         self,
         report: TaxReport,
-        schema_location: str = "CrsXML_v3.0.xsd",
+        schema_location: str = "CrsXML_v2.0.xsd",
         progress_callback: Callable[[int, int, AccountReport], None] | None = None,
     ) -> etree._ElementTree:
         root = etree.Element(
             q(CRS_NS, "CRS_OECD"),
             nsmap={"crs": CRS_NS, "stf": CRS_STF_NS, "cfc": CRS_CFC_NS, "iso": CRS_ISO_NS, "ftc": CRS_FTCA_V1_NS, "xsi": XSI_NS},
-            attrib={q(XSI_NS, "schemaLocation"): f"{CRS_NS} {schema_location}", "version": "3.0"},
+            attrib={q(XSI_NS, "schemaLocation"): f"{CRS_NS} {schema_location}", "version": "2.0"},
         )
         self._message_spec(root, report)
         body = add(root, CRS_NS, "CrsBody")
@@ -86,12 +86,9 @@ class CrsGenerator:
         add(item, CRS_NS, "AccountNumber", account.account_number, attrs)
         holder = add(item, CRS_NS, "AccountHolder")
         if account.account_holder:
-            for equity in account.account_holder.crs_equity_interest_types:
-                add(holder, CRS_NS, "EquityInterestType", equity)
-            add(holder, CRS_NS, "SelfCert", account.account_holder.crs_self_cert or "CRS901")
             if account.account_holder.kind == "organisation":
                 org = add(holder, CRS_NS, "Organisation")
-                self._organisation_party(org, account.account_holder, CRS_NS, CRS_CFC_NS, tax_id_element="TIN")
+                self._organisation_party(org, account.account_holder, CRS_NS, CRS_CFC_NS, tax_id_element="IN")
                 add(holder, CRS_NS, "AcctHolderType", account.account_holder.acct_holder_type or "CRS101")
             else:
                 ind = add(holder, CRS_NS, "Individual")
@@ -102,15 +99,9 @@ class CrsGenerator:
             self._person_party(ind, controlling, CRS_NS, CRS_CFC_NS)
             for cp_type in controlling.crs_controlling_person_types or ["CRS801"]:
                 add(cp, CRS_NS, "CtrlgPersonType", cp_type)
-            add(cp, CRS_NS, "SelfCert", controlling.crs_controlling_self_cert or "CRS1001")
         add(item, CRS_NS, "AccountBalance", account.account_balance, {"currCode": account.account_currency})
         for payment in account.payments:
             self._payment(item, payment)
-        add(item, CRS_NS, "DDProcedure", account.crs_dd_procedure or "CRS1201")
-        add(item, CRS_NS, "AccountType", account.crs_account_type or "CRS1101")
-        if account.crs_joint_account_number:
-            joint = add(item, CRS_NS, "JointAccount")
-            add(joint, CRS_NS, "Number", account.crs_joint_account_number)
 
     def _doc_spec(self, parent: etree._Element, doc: DocSpec, doc_ns: str, child_ns: str) -> None:
         elem = add(parent, doc_ns, "DocSpec")

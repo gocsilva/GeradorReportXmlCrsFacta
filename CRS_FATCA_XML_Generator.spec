@@ -9,7 +9,11 @@ a = Analysis(
     ["main.py"],
     pathex=[str(root / "src")],
     binaries=[],
-    datas=[("schemas", "schemas"), ("assets", "assets")],
+    datas=[
+        ("schemas/crs/v2_0", "schemas/crs/v2_0"),
+        ("schemas/fatca/v2_0_1", "schemas/fatca/v2_0_1"),
+        ("assets", "assets"),
+    ],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},

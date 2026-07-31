@@ -137,7 +137,7 @@ def diagnostics_dir() -> Path:
 
 
 def default_crs_schema() -> Path:
-    return resource_path("schemas", "crs", "v3_0", "CrsXML_v3.0.xsd")
+    return resource_path("schemas", "crs", "v2_0", "CrsXML_v2.0.xsd")
 
 
 def default_fatca_schema() -> Path:
