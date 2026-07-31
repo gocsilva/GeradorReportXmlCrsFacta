@@ -154,6 +154,56 @@ def test_geracao_remove_caracteres_rejeitados_pelo_portal(tmp_path: Path) -> Non
         assert joined.isascii()
 
 
+def test_crs_remove_caracteres_invalidos_de_todos_os_textos_gravados(tmp_path: Path) -> None:
+    profile = infer_default_profile(["DocumentoCliente", "Tipo de documento", "NumConta", "NomeCliente", "SaldoTotal", "Endereco", "Cidade", "Pais"])
+    profile.output.crs_path = str(tmp_path / "crs_textos_limpos.xml")
+    profile.field_mappings["message.warning"] = MappingRule("fixed", fixed_value="Aviso &amp; risco <alto> -- /* &#65; @#$%[]{}\\|")
+    profile.field_mappings["message.contact"] = MappingRule("fixed", fixed_value="Contato & <portal> -- /* &#")
+    row = {
+        "DocumentoCliente": "06360698501",
+        "Tipo de documento": "PF",
+        "NumConta": "ACC&<01>--/*&#",
+        "NomeCliente": "Maria &amp; Joao <Teste> -- /* &#65; @#$%[]{}\\|",
+        "SaldoTotal": "155,73",
+        "Endereco": "Rua HÃƒÆ’Ã‚Â©lio &amp; Rodrigues <n 10> -- /* &#999; @#$%[]{}\\|",
+        "Cidade": "SÃƒÆ’Ã‚Â£o Paulo & <SP> -- /* &#",
+        "Pais": "BR",
+        "_excel_row": 2,
+    }
+
+    result = GenerationService(default_crs_schema(), default_fatca_schema()).generate(["crs"], [row], profile, Path("entrada.xlsx"), overwrite=True)[0]
+
+    assert result.valid is True
+    raw_xml = (tmp_path / "crs_textos_limpos.xml").read_text(encoding="utf-8")
+    assert "&amp;" not in raw_xml
+    assert "&lt;" not in raw_xml
+    assert "&gt;" not in raw_xml
+    assert "&apos;" not in raw_xml
+    assert "&quot;" not in raw_xml
+    tree = etree.parse(str(tmp_path / "crs_textos_limpos.xml"))
+    text_values = [value for value in tree.xpath(".//text()") if value.strip()]
+    joined = "\n".join(text_values)
+    for forbidden in ("&", "<", ">", "'", '"', "--", "/*", "&#", "/", "\\", "|", "@", "#", "$", "%", "[", "]", "{", "}"):
+        assert forbidden not in joined
+    assert joined.isascii()
+    technical_text_tags = {"ReportingPeriod", "Timestamp", "BirthDate", "AccountBalance", "PaymentAmnt"}
+    for value in tree.xpath(".//text()"):
+        if not value.strip():
+            continue
+        parent = value.getparent()
+        local_name = etree.QName(parent).localname
+        if local_name in technical_text_tags:
+            continue
+        assert re.fullmatch(r"[A-Za-z0-9 ]+", str(value)), (local_name, str(value))
+    for element in tree.getroot().iter():
+        for key, value in element.attrib.items():
+            local_name = etree.QName(key).localname
+            if local_name in {"schemaLocation", "version"}:
+                continue
+            assert re.fullmatch(r"[A-Za-z0-9]+", value), (local_name, value)
+    assert tree.findtext(".//{urn:oecd:ties:crs:v3}AccountBalance") == "155.73"
+
+
 def test_fatca_usa_apenas_linhas_usperson_true_quando_coluna_existe(tmp_path: Path) -> None:
     headers = ["DocumentoCliente", "Tipo de documento", "NumConta", "NomeCliente", "SaldoTotal", "Endereco", "Cidade", "Pais", "USPerson"]
     profile = infer_default_profile(headers)
@@ -1051,7 +1101,7 @@ def test_geracao_pode_ignorar_linha_com_controlador_invalido(tmp_path: Path) -> 
     )
     assert generated[0].valid is True
     crs = etree.parse(str(tmp_path / "ignorar_CRS.xml"))
-    assert crs.xpath("count(.//*[local-name()='AccountNumber' and text()='ACC-OK'])") == 1
+    assert crs.xpath("count(.//*[local-name()='AccountNumber' and text()='ACC OK'])") == 1
     assert crs.xpath("count(.//*[local-name()='AccountNumber' and text()='ACC-BAD'])") == 0
     manifest = json.loads((tmp_path / "entrada_manifesto_auditoria.json").read_text(encoding="utf-8"))
     assert manifest["counts"]["total excluido"] == 1

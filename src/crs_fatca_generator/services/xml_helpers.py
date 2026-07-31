@@ -4,6 +4,7 @@ import os
 import re
 import tempfile
 import unicodedata
+from html import unescape
 from pathlib import Path
 
 from lxml import etree
@@ -22,7 +23,13 @@ FATCA_NS = "urn:oecd:ties:fatca:v2"
 FATCA_SFA_NS = "urn:oecd:ties:stffatcatypes:v2"
 FATCA_STF_NS = "urn:oecd:ties:stf:v4"
 FATCA_ISO_NS = "urn:oecd:ties:isofatcatypes:v1"
+CRS_STRICT_TEXT_NAMESPACES = {CRS_NS, CRS_STF_NS, CRS_CFC_NS, CRS_ISO_NS, CRS_FTCA_V1_NS}
 PORTAL_PROHIBITED_TEXT_PATTERNS = (
+    ("&amp;", " e "),
+    ("&lt;", " "),
+    ("&gt;", " "),
+    ("&apos;", ""),
+    ("&quot;", ""),
     ("&#", ""),
     ("&", " e "),
     ("<", " "),
@@ -32,6 +39,15 @@ PORTAL_PROHIBITED_TEXT_PATTERNS = (
     ("--", "-"),
     ("/*", "/"),
 )
+STRICT_TEXT_ALLOWED_CHARS = re.compile(r"[^A-Za-z0-9 ]")
+PORTAL_ALLOWED_TEXT_CHARS = re.compile(r"[^A-Za-z0-9 .,;:()_+\-=]")
+DECIMAL_ALLOWED_CHARS = re.compile(r"[^0-9.\-]")
+DATE_ALLOWED_CHARS = re.compile(r"[^0-9\-]")
+TIMESTAMP_ALLOWED_CHARS = re.compile(r"[^0-9T:\-.+Z]")
+SCHEMA_LOCATION_ALLOWED_CHARS = re.compile(r"[^A-Za-z0-9 .:_/\-]")
+DECIMAL_TEXT_TAGS = {"AccountBalance", "PaymentAmnt"}
+DATE_TEXT_TAGS = {"ReportingPeriod", "BirthDate"}
+TIMESTAMP_TEXT_TAGS = {"Timestamp"}
 
 
 def q(ns: str, tag: str) -> str:
@@ -39,30 +55,83 @@ def q(ns: str, tag: str) -> str:
 
 
 def add(parent: etree._Element, ns: str, tag: str, text: object = "", attrib: dict[str, str] | None = None) -> etree._Element:
-    clean_attrib = {key: sanitize_xml_text(value) for key, value in (attrib or {}).items()}
+    strict_text = ns in CRS_STRICT_TEXT_NAMESPACES
+    clean_attrib = {key: sanitize_xml_attribute(value, key, strict_text=strict_text) for key, value in (attrib or {}).items()}
     elem = etree.SubElement(parent, q(ns, tag), attrib=clean_attrib)
     if text not in (None, ""):
-        elem.text = sanitize_xml_text(text)
+        elem.text = sanitize_xml_text(text, tag, strict_text=strict_text)
     return elem
 
 
-def sanitize_xml_text(value: object) -> str:
+def sanitize_xml_text(value: object, tag: str | None = None, strict_text: bool = False) -> str:
     text = _repair_mojibake(strip_invalid_xml_chars(str(value)))
-    text = strip_invalid_xml_chars(text)
-    for pattern, replacement in PORTAL_PROHIBITED_TEXT_PATTERNS:
-        text = text.replace(pattern, replacement)
+    text = unescape(strip_invalid_xml_chars(text))
     text = _ascii_only(text)
+    text = _remove_portal_prohibited_text(text)
+    local_tag = _local_name(tag or "")
+    if local_tag in DECIMAL_TEXT_TAGS:
+        text = DECIMAL_ALLOWED_CHARS.sub("", text)
+    elif local_tag in DATE_TEXT_TAGS:
+        text = DATE_ALLOWED_CHARS.sub("", text)
+    elif local_tag in TIMESTAMP_TEXT_TAGS:
+        text = TIMESTAMP_ALLOWED_CHARS.sub("", text)
+    elif strict_text:
+        text = STRICT_TEXT_ALLOWED_CHARS.sub(" ", text)
+    else:
+        text = PORTAL_ALLOWED_TEXT_CHARS.sub(" ", text)
+    text = _remove_portal_prohibited_text(text)
     return re.sub(r"\s+", " ", text).strip()
+
+
+def sanitize_xml_attribute(value: object, attr_name: str | None = None, strict_text: bool = False) -> str:
+    text = _repair_mojibake(strip_invalid_xml_chars(str(value)))
+    text = unescape(strip_invalid_xml_chars(text))
+    text = _ascii_only(text)
+    text = _remove_portal_prohibited_text(text)
+    local_name = _local_name(attr_name or "")
+    if local_name == "schemaLocation":
+        text = SCHEMA_LOCATION_ALLOWED_CHARS.sub(" ", text)
+    elif local_name == "version":
+        text = re.sub(r"[^0-9.]", "", text)
+    elif strict_text:
+        text = STRICT_TEXT_ALLOWED_CHARS.sub("", text)
+    else:
+        text = PORTAL_ALLOWED_TEXT_CHARS.sub(" ", text)
+    text = _remove_portal_prohibited_text(text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _remove_portal_prohibited_text(value: str) -> str:
+    text = value
+    previous = None
+    while text != previous:
+        previous = text
+        for pattern, replacement in PORTAL_PROHIBITED_TEXT_PATTERNS:
+            text = text.replace(pattern, replacement)
+    return text
 
 
 def sanitize_xml_tree(root: etree._Element) -> None:
     for element in root.iter():
+        qname = etree.QName(element)
+        local_tag = qname.localname
+        strict_text = qname.namespace in CRS_STRICT_TEXT_NAMESPACES
         if element.text and element.text.strip():
-            element.text = sanitize_xml_text(element.text)
+            element.text = sanitize_xml_text(element.text, local_tag, strict_text=strict_text)
         if element.tail and element.tail.strip():
             element.tail = sanitize_xml_text(element.tail)
         for key, value in list(element.attrib.items()):
-            element.set(key, sanitize_xml_text(value))
+            element.set(key, sanitize_xml_attribute(value, key, strict_text=strict_text))
+
+
+def _local_name(name: str) -> str:
+    if not name:
+        return ""
+    if name.startswith("{"):
+        return name.rsplit("}", 1)[-1]
+    if ":" in name:
+        return name.rsplit(":", 1)[-1]
+    return name
 
 
 def strip_invalid_xml_chars(value: str) -> str:

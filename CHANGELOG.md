@@ -49,3 +49,4 @@
 - Ajusta PJ CRS: quando ha controlling person o app infere `AcctHolderType=CRS101`; quando nao ha controlling person e o Excel nao informa o tipo, infere `CRS102`; valores explicitos `CRS101/CRS102/CRS103` do Excel continuam sendo respeitados.
 - Alinha os IDs CRS ao padrao do gerador oficial: `MessageRefId` e `ReportingFI DocRefId` com sufixo `FI...`, `Account DocRefId` sem marcadores internos `FIC/FICBR`, todos compartilhando sequencia unica por execucao.
 - Simplifica o identificador unico CRS para no maximo 10 caracteres no estilo sequencial `KY25000001`, mantendo o XML final completo e sem duplicidade conforme a regra do gerador oficial.
+- Endurece a limpeza de textos CRS por allowlist: campos textuais livres agora aceitam somente letras, numeros e espaco; formatos tecnicos de data, timestamp e decimal sao preservados para manter o XSD valido.
