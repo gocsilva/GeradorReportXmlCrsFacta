@@ -36,3 +36,5 @@ XML_Gerados/
 *.011
 
 CRS_FATCA_XML_Generator.exe
+
+release_artifacts/

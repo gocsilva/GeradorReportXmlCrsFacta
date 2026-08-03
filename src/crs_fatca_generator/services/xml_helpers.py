@@ -14,6 +14,7 @@ from crs_fatca_generator.security.masking import remove_control_chars
 
 XSI_NS = "http://www.w3.org/2001/XMLSchema-instance"
 CRS_NS = "urn:oecd:ties:crs:v2"
+CRS_V3_NS = "urn:oecd:ties:crs:v3"
 CRS_STF_NS = "urn:oecd:ties:crsstf:v5"
 CRS_CFC_NS = "urn:oecd:ties:commontypesfatcacrs:v2"
 CRS_ISO_NS = "urn:oecd:ties:isocrstypes:v1"
@@ -23,7 +24,7 @@ FATCA_NS = "urn:oecd:ties:fatca:v2"
 FATCA_SFA_NS = "urn:oecd:ties:stffatcatypes:v2"
 FATCA_STF_NS = "urn:oecd:ties:stf:v4"
 FATCA_ISO_NS = "urn:oecd:ties:isofatcatypes:v1"
-CRS_STRICT_TEXT_NAMESPACES = {CRS_NS, CRS_STF_NS, CRS_CFC_NS, CRS_ISO_NS, CRS_FTCA_V1_NS}
+CRS_STRICT_TEXT_NAMESPACES = {CRS_NS, CRS_V3_NS, CRS_STF_NS, CRS_CFC_NS, CRS_ISO_NS, CRS_FTCA_V1_NS}
 PORTAL_PROHIBITED_TEXT_PATTERNS = (
     ("&amp;", " e "),
     ("&lt;", " "),

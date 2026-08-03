@@ -1,37 +1,42 @@
 <?xml version='1.0' encoding='UTF-8'?>
-<FATCA_OECD xmlns="urn:oecd:ties:fatca:v2" xmlns:sfa="urn:oecd:ties:stffatcatypes:v2" xmlns:stf="urn:oecd:ties:stf:v4" xmlns:iso="urn:oecd:ties:isofatcatypes:v1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="urn:oecd:ties:fatca:v2 FatcaXML_v2.0.1.xsd" version="2.0">
-  <MessageSpec>
-    <sfa:TransmittingCountry>BR</sfa:TransmittingCountry>
+<ftc:FATCA_OECD xmlns:ftc="urn:oecd:ties:fatca:v2" xmlns:sfa="urn:oecd:ties:stffatcatypes:v2" xmlns:stf="urn:oecd:ties:stf:v4" xmlns:iso="urn:oecd:ties:isofatcatypes:v1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="urn:oecd:ties:fatca:v2 FatcaXML_v2.0.1.xsd" version="2.0">
+  <ftc:MessageSpec>
+    <sfa:SendingCompanyIN>000000.00000.TA.136</sfa:SendingCompanyIN>
+    <sfa:TransmittingCountry>KY</sfa:TransmittingCountry>
     <sfa:ReceivingCountry>US</sfa:ReceivingCountry>
     <sfa:MessageType>FATCA</sfa:MessageType>
-    <sfa:MessageRefId>AUTO-BR-f730a6808b5a4e299ff4b64b6ba17d0a</sfa:MessageRefId>
+    <sfa:Warning>ARQUIVO TECNICO DE TESTE: tratamento do US Tax ID pendente de confirmacao fiscal; nao usar para envio definitivo.</sfa:Warning>
+    <sfa:MessageRefId>000000.00000.TA.136.B04DFDD5-FA59-4E8A-A4E3-14A7B89C29DD</sfa:MessageRefId>
     <sfa:ReportingPeriod>2025-12-31</sfa:ReportingPeriod>
-    <sfa:Timestamp>2026-07-28T17:37:54</sfa:Timestamp>
-  </MessageSpec>
-  <FATCA>
-    <ReportingFI>
-      <sfa:ResCountryCode>BR</sfa:ResCountryCode>
-      <sfa:TIN issuedBy="BR">123456</sfa:TIN>
-      <sfa:Name>Banco Teste</sfa:Name>
-      <sfa:Address>
-        <sfa:CountryCode>BR</sfa:CountryCode>
-        <sfa:AddressFree>Rua A 1</sfa:AddressFree>
+    <sfa:Timestamp>2026-08-03T16:37:29</sfa:Timestamp>
+  </ftc:MessageSpec>
+  <ftc:FATCA>
+    <ftc:ReportingFI>
+      <sfa:ResCountryCode>KY</sfa:ResCountryCode>
+      <sfa:TIN issuedBy="US">TBUHPP.00008.ME.136</sfa:TIN>
+      <sfa:TIN issuedBy="KY">FI107442</sfa:TIN>
+      <sfa:Name>BANCO BS2 S.A.</sfa:Name>
+      <sfa:Address legalAddressType="OECD304">
+        <sfa:CountryCode>KY</sfa:CountryCode>
+        <sfa:AddressFix>
+          <sfa:City>George Town</sfa:City>
+        </sfa:AddressFix>
       </sfa:Address>
-      <FilerCategory>FATCA601</FilerCategory>
-      <DocSpec>
-        <DocTypeIndic>FATCA1</DocTypeIndic>
-        <DocRefId>AUTO-BR-81a1e87f1bd14243b8878b53fdc6c636</DocRefId>
-      </DocSpec>
-    </ReportingFI>
-    <ReportingGroup>
-      <AccountReport>
-        <DocSpec>
-          <DocTypeIndic>FATCA1</DocTypeIndic>
-          <DocRefId>AUTO-BR-cc0a668adbf547a59292cd9f41e7f1a4</DocRefId>
-        </DocSpec>
-        <AccountNumber AcctNumberType="OECD602">ACC1</AccountNumber>
-        <AccountHolder>
-          <Individual>
+      <ftc:FilerCategory>FATCA602</ftc:FilerCategory>
+      <ftc:DocSpec>
+        <ftc:DocTypeIndic>FATCA1</ftc:DocTypeIndic>
+        <ftc:DocRefId>TBUHPP.00008.ME.136.582DB1B4-1A1D-4172-8104-24A5C70C4D05</ftc:DocRefId>
+      </ftc:DocSpec>
+    </ftc:ReportingFI>
+    <ftc:ReportingGroup>
+      <ftc:AccountReport>
+        <ftc:DocSpec>
+          <ftc:DocTypeIndic>FATCA1</ftc:DocTypeIndic>
+          <ftc:DocRefId>TBUHPP.00008.ME.136.9D5CA5F5-02B3-4B91-B016-27FC1BB15D24</ftc:DocRefId>
+        </ftc:DocSpec>
+        <ftc:AccountNumber AcctNumberType="OECD602">ACC1</ftc:AccountNumber>
+        <ftc:AccountHolder>
+          <ftc:Individual>
             <sfa:ResCountryCode>BR</sfa:ResCountryCode>
             <sfa:Name>
               <sfa:FirstName>Ana</sfa:FirstName>
@@ -41,10 +46,10 @@
               <sfa:CountryCode>BR</sfa:CountryCode>
               <sfa:AddressFree>Rua B 2</sfa:AddressFree>
             </sfa:Address>
-          </Individual>
-        </AccountHolder>
-        <AccountBalance currCode="USD">1000.00</AccountBalance>
-      </AccountReport>
-    </ReportingGroup>
-  </FATCA>
-</FATCA_OECD>
+          </ftc:Individual>
+        </ftc:AccountHolder>
+        <ftc:AccountBalance currCode="USD">1000.00</ftc:AccountBalance>
+      </ftc:AccountReport>
+    </ftc:ReportingGroup>
+  </ftc:FATCA>
+</ftc:FATCA_OECD>

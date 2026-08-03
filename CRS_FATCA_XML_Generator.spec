@@ -11,6 +11,7 @@ a = Analysis(
     binaries=[],
     datas=[
         ("schemas/crs/v2_0", "schemas/crs/v2_0"),
+        ("schemas/crs/v3_0", "schemas/crs/v3_0"),
         ("schemas/fatca/v2_0_1", "schemas/fatca/v2_0_1"),
         ("assets", "assets"),
     ],

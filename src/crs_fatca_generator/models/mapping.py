@@ -43,6 +43,8 @@ class OutputConfig:
     crs_size_limit_mb: int = 0
     fatca_size_limit_mb: int = 0
     fatca_nil_report: bool = False
+    crs_closed_account_zero_balance: bool = True
+    crs_closed_account_zero_payment: bool = True
 
 
 @dataclass

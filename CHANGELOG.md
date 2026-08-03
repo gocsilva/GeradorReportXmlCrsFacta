@@ -51,3 +51,7 @@
 - Simplifica o identificador unico CRS para no maximo 10 caracteres no estilo sequencial `KY25000001`, mantendo o XML final completo e sem duplicidade conforme a regra do gerador oficial.
 - Endurece a limpeza de textos CRS por allowlist: campos textuais livres agora aceitam somente letras, numeros e espaco; formatos tecnicos de data, timestamp e decimal sao preservados para manter o XSD valido.
 - Forca a geracao CRS no schema XML v2: namespace `urn:oecd:ties:crs:v2`, `version="2.0"`, `CrsXML_v2.0.xsd` e remocao dos elementos exclusivos do CRS v3.
+- Adiciona aba de Regras com opcoes CRS para conta encerrada: zerar saldo em USD e criar/ajustar pagamento `CRS501` de valor zero.
+- Adiciona aba Corrigir CRS para corrigir um XML existente, escolher saida CRS v2 ou CRS v3 e gerar `OECD1` ou `OECD2` com relacionamento de correcao por `CorrDocRefId` quando aplicavel.
+- Ajusta o modo CRS `OECD2`: `MessageTypeIndic` passa para `CRS702`, `MessageRefId` e `DocRefId` corrigidos ficam novos, `CorrDocRefId` aponta para o documento original e o `ReportingFI` e reenviado como `OECD0`.
+- A aba Corrigir CRS agora permite selecionar o Excel de dados e o Excel de erros; o app le todas as abas do Excel de erros, extrai os `DocRefId` KY e aplica `CRS0024`/`KY0008` somente nos registros correspondentes.

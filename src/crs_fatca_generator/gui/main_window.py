@@ -34,6 +34,7 @@ from PySide6.QtWidgets import (
 
 from crs_fatca_generator.infrastructure.paths import default_crs_schema, default_fatca_schema, logs_dir
 from crs_fatca_generator.models.mapping import GroupingRules, MappingProfile, MappingRule, OutputConfig
+from crs_fatca_generator.services.crs_correction_service import CrsCorrectionService
 from crs_fatca_generator.services.crs_generator import CrsGenerator
 from crs_fatca_generator.services.excel_reader import ExcelReader
 from crs_fatca_generator.services.fatca_generator import FatcaGenerator
@@ -241,6 +242,9 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(self._split_tab(), "7. Dividir XML")
         self.tabs.addTab(self._sanitize_tab(), "8. Limpar XML")
 
+        self.tabs.addTab(self._rules_tab(), "9. Regras")
+        self.tabs.addTab(self._crs_fix_tab(), "10. Corrigir CRS")
+
         menu = self.menuBar().addMenu("Arquivo")
         open_profile = QAction("Abrir perfil", self)
         open_profile.triggered.connect(self.open_profile)
@@ -299,7 +303,7 @@ class MainWindow(QMainWindow):
     def _type_tab(self) -> QWidget:
         page = QWidget()
         form = QFormLayout(page)
-        self.crs_check = QCheckBox("CRS XML v3.0")
+        self.crs_check = QCheckBox("CRS XML v2.0")
         self.crs_check.setChecked(True)
         self.fatca_check = QCheckBox("FATCA XML v2.0.1")
         self.fatca_check.setChecked(True)
@@ -396,6 +400,17 @@ class MainWindow(QMainWindow):
             edit = QLineEdit("Account number*" if key == "account_key" else "")
             self.group_edits[key] = edit
             form.addRow(label, edit)
+        return page
+
+    def _rules_tab(self) -> QWidget:
+        page = QWidget()
+        form = QFormLayout(page)
+        self.crs_closed_zero_balance_check = QCheckBox("Conta encerrada gera AccountBalance 0.00 USD")
+        self.crs_closed_zero_balance_check.setChecked(True)
+        self.crs_closed_zero_payment_check = QCheckBox("Conta encerrada gera Payment CRS501 de 0.00 USD")
+        self.crs_closed_zero_payment_check.setChecked(True)
+        form.addRow("CRS", self.crs_closed_zero_balance_check)
+        form.addRow("CRS", self.crs_closed_zero_payment_check)
         return page
 
     def _generate_tab(self) -> QWidget:
@@ -539,6 +554,64 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.sanitize_result_text)
         return page
 
+    def _crs_fix_tab(self) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        form = QFormLayout()
+        self.crs_fix_input_edit = QLineEdit()
+        self.crs_fix_input_edit.setReadOnly(True)
+        input_btn = QPushButton("Selecionar CRS XML")
+        input_btn.clicked.connect(self.pick_crs_fix_input)
+        input_row = QHBoxLayout()
+        input_row.addWidget(self.crs_fix_input_edit)
+        input_row.addWidget(input_btn)
+        self.crs_fix_output_edit = QLineEdit()
+        output_btn = QPushButton("Escolher XML corrigido")
+        output_btn.clicked.connect(self.pick_crs_fix_output)
+        output_row = QHBoxLayout()
+        output_row.addWidget(self.crs_fix_output_edit)
+        output_row.addWidget(output_btn)
+        self.crs_fix_data_excel_edit = QLineEdit()
+        self.crs_fix_data_excel_edit.setReadOnly(True)
+        data_excel_btn = QPushButton("Selecionar Excel dados")
+        data_excel_btn.clicked.connect(self.pick_crs_fix_data_excel)
+        data_excel_row = QHBoxLayout()
+        data_excel_row.addWidget(self.crs_fix_data_excel_edit)
+        data_excel_row.addWidget(data_excel_btn)
+        self.crs_fix_errors_excel_edit = QLineEdit()
+        self.crs_fix_errors_excel_edit.setReadOnly(True)
+        errors_excel_btn = QPushButton("Selecionar Excel erros")
+        errors_excel_btn.clicked.connect(self.pick_crs_fix_errors_excel)
+        errors_excel_row = QHBoxLayout()
+        errors_excel_row.addWidget(self.crs_fix_errors_excel_edit)
+        errors_excel_row.addWidget(errors_excel_btn)
+        self.crs_fix_version_combo = QComboBox()
+        self.crs_fix_version_combo.addItems(["CRS v2", "CRS v3"])
+        self.crs_fix_doc_type_combo = QComboBox()
+        self.crs_fix_doc_type_combo.addItems(["OECD2", "OECD1"])
+        self.crs_fix_zero_balance_check = QCheckBox("Conta encerrada gera AccountBalance 0.00 USD")
+        self.crs_fix_zero_balance_check.setChecked(True)
+        self.crs_fix_zero_payment_check = QCheckBox("Conta encerrada gera Payment CRS501 de 0.00 USD")
+        self.crs_fix_zero_payment_check.setChecked(True)
+        form.addRow("XML CRS", input_row)
+        form.addRow("Destino", output_row)
+        form.addRow("Excel com dados", data_excel_row)
+        form.addRow("Excel com erros", errors_excel_row)
+        form.addRow("Versao CRS do XML corrigido", self.crs_fix_version_combo)
+        form.addRow("DocTypeIndic", self.crs_fix_doc_type_combo)
+        form.addRow("Regra CRS", self.crs_fix_zero_balance_check)
+        form.addRow("Regra CRS", self.crs_fix_zero_payment_check)
+        layout.addLayout(form)
+        fix_btn = QPushButton("Corrigir CRS")
+        fix_btn.clicked.connect(self.correct_crs_xml)
+        layout.addWidget(fix_btn)
+        self.crs_fix_progress = QProgressBar()
+        layout.addWidget(self.crs_fix_progress)
+        self.crs_fix_result_text = QTextEdit()
+        self.crs_fix_result_text.setReadOnly(True)
+        layout.addWidget(self.crs_fix_result_text)
+        return page
+
     def select_excel(self) -> None:
         path, _ = QFileDialog.getOpenFileName(self, "Selecionar Excel", neutral_start_dir(), "Excel (*.xlsx *.xlsm)")
         if not path:
@@ -661,6 +734,8 @@ class MainWindow(QMainWindow):
         profile.output.crs_size_limit_mb = self.crs_limit_spin.value()
         profile.output.fatca_size_limit_mb = self.fatca_limit_spin.value()
         profile.output.fatca_nil_report = self.fatca_nil_check.isChecked()
+        profile.output.crs_closed_account_zero_balance = self.crs_closed_zero_balance_check.isChecked()
+        profile.output.crs_closed_account_zero_payment = self.crs_closed_zero_payment_check.isChecked()
         profile.field_mappings["nil_report.enabled"] = MappingRule("fixed", fixed_value="sim" if profile.output.fatca_nil_report else "nao")
         return profile
 
@@ -694,6 +769,8 @@ class MainWindow(QMainWindow):
             else:
                 widget.setText(rule.fixed_value)
         self.fatca_nil_check.setChecked(self._profile_fatca_nil_enabled())
+        self.crs_closed_zero_balance_check.setChecked(bool(getattr(self.profile.output, "crs_closed_account_zero_balance", True)))
+        self.crs_closed_zero_payment_check.setChecked(bool(getattr(self.profile.output, "crs_closed_account_zero_payment", True)))
 
     def kinds(self) -> list[str]:
         kinds: list[str] = []
@@ -919,6 +996,8 @@ class MainWindow(QMainWindow):
         self.crs_limit_spin.setValue(getattr(self.profile.output, "crs_size_limit_mb", 0))
         self.fatca_limit_spin.setValue(getattr(self.profile.output, "fatca_size_limit_mb", 0))
         self.fatca_nil_check.setChecked(self._profile_fatca_nil_enabled())
+        self.crs_closed_zero_balance_check.setChecked(bool(getattr(self.profile.output, "crs_closed_account_zero_balance", True)))
+        self.crs_closed_zero_payment_check.setChecked(bool(getattr(self.profile.output, "crs_closed_account_zero_payment", True)))
 
     def _profile_fatca_nil_enabled(self) -> bool:
         nil_rule = self.profile.field_mappings.get("nil_report.enabled")
@@ -952,6 +1031,33 @@ class MainWindow(QMainWindow):
         path, _ = QFileDialog.getSaveFileName(self, "Salvar XML limpo", initial, "XML (*.xml)")
         if path:
             self.sanitize_output_edit.setText(path)
+
+    def pick_crs_fix_input(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(self, "Selecionar XML CRS", neutral_start_dir(), "XML (*.xml)")
+        if not path:
+            return
+        source = Path(path)
+        self.crs_fix_input_edit.setText(path)
+        if not self.crs_fix_output_edit.text().strip():
+            doc_type = self.crs_fix_doc_type_combo.currentText() if hasattr(self, "crs_fix_doc_type_combo") else "OECD2"
+            version = self.crs_fix_version_combo.currentText().replace("CRS ", "").lower() if hasattr(self, "crs_fix_version_combo") else "v2"
+            self.crs_fix_output_edit.setText(str(source.with_name(f"{source.stem}_corrigido_{version}_{doc_type}{source.suffix or '.xml'}")))
+
+    def pick_crs_fix_output(self) -> None:
+        initial = self.crs_fix_output_edit.text().strip() or neutral_start_dir()
+        path, _ = QFileDialog.getSaveFileName(self, "Salvar CRS corrigido", initial, "XML (*.xml)")
+        if path:
+            self.crs_fix_output_edit.setText(path)
+
+    def pick_crs_fix_data_excel(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(self, "Selecionar Excel com dados", neutral_start_dir(), "Excel (*.xlsx *.xlsm)")
+        if path:
+            self.crs_fix_data_excel_edit.setText(path)
+
+    def pick_crs_fix_errors_excel(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(self, "Selecionar Excel com erros CRS", neutral_start_dir(), "Excel (*.xlsx *.xlsm)")
+        if path:
+            self.crs_fix_errors_excel_edit.setText(path)
 
     def split_existing_xml(self) -> None:
         xml_path = Path(self.split_input_edit.text().strip())
@@ -1014,6 +1120,76 @@ class MainWindow(QMainWindow):
                     f"Atributos alterados: {result.attributes_changed}",
                     f"Caracteres XML 1.0 invalidos removidos: {result.invalid_chars_removed}",
                     f"Parser de recuperacao usado: {'sim' if result.used_recovery_parser else 'nao'}",
+                ]
+            )
+        )
+
+    def correct_crs_xml(self) -> None:
+        xml_path = Path(self.crs_fix_input_edit.text().strip())
+        output_path = Path(self.crs_fix_output_edit.text().strip()) if self.crs_fix_output_edit.text().strip() else None
+        data_excel_path = Path(self.crs_fix_data_excel_edit.text().strip()) if self.crs_fix_data_excel_edit.text().strip() else None
+        errors_excel_path = Path(self.crs_fix_errors_excel_edit.text().strip()) if self.crs_fix_errors_excel_edit.text().strip() else None
+        if not xml_path.exists():
+            QMessageBox.warning(self, "Corrigir CRS", "Selecione um XML CRS existente.")
+            return
+        if data_excel_path and not data_excel_path.exists():
+            QMessageBox.warning(self, "Corrigir CRS", "Selecione um Excel com dados existente.")
+            return
+        if errors_excel_path and not errors_excel_path.exists():
+            QMessageBox.warning(self, "Corrigir CRS", "Selecione um Excel de erros existente.")
+            return
+        self.crs_fix_progress.setRange(0, 0)
+        self.crs_fix_result_text.setPlainText("Corrigindo XML CRS...")
+        QApplication.processEvents()
+        try:
+            result = CrsCorrectionService().correct_file(
+                xml_path,
+                output_path,
+                self.crs_fix_version_combo.currentText(),
+                self.crs_fix_doc_type_combo.currentText(),
+                self.crs_fix_zero_balance_check.isChecked(),
+                self.crs_fix_zero_payment_check.isChecked(),
+                data_excel_path,
+                errors_excel_path,
+            )
+        except Exception as exc:
+            self.crs_fix_progress.setRange(0, 100)
+            self.crs_fix_progress.setValue(0)
+            QMessageBox.critical(self, "Corrigir CRS", f"Nao foi possivel corrigir o CRS:\n{exc}")
+            return
+        self.crs_fix_progress.setRange(0, 1)
+        self.crs_fix_progress.setValue(1)
+        status = f"valido no XSD CRS {result.crs_version}" if result.validation_errors == 0 else f"gerado com {result.validation_errors} erro(s) de XSD"
+        self.crs_fix_result_text.setPlainText(
+            "\n".join(
+                [
+                    f"CRS corrigido: {status}.",
+                    "",
+                    f"Origem: {result.input_path}",
+                    f"Destino: {result.output_path}",
+                    f"Versao CRS aplicada: {result.crs_version}",
+                    f"DocTypeIndic aplicado: {result.doc_type_indic}",
+                    f"MessageTypeIndic aplicado: {result.message_type_indic}",
+                    f"MessageRefId antigo: {result.old_message_ref_id}",
+                    f"MessageRefId novo: {result.new_message_ref_id}",
+                    f"Excel com dados: {result.data_excel_path or '-'}",
+                    f"Excel com erros: {result.errors_excel_path or '-'}",
+                    f"Linhas de erro lidas: {result.error_rows_loaded}",
+                    f"KY alvo no Excel de erros: {result.target_doc_refs}",
+                    f"KY encontrados no XML: {result.matched_doc_refs}",
+                    f"KY nao encontrados nesse XML: {result.unmatched_doc_refs}",
+                    f"AccountReports removidos por nao estarem no Excel de erros: {result.account_reports_removed}",
+                    f"ReportingFI reenviado como OECD0: {result.reporting_fi_resent}",
+                    f"DocSpecs atualizados: {result.docs_updated}",
+                    f"CorrDocRefId adicionados: {result.corr_doc_refs_added}",
+                    f"Codigos de erro ainda nao mapeados: {result.unknown_error_codes}",
+                    f"Contas encerradas localizadas: {result.closed_accounts}",
+                    f"Saldos zerados: {result.balances_zeroed}",
+                    f"Pagamentos CRS501 zero ajustados/criados: {result.zero_payments_added_or_updated}",
+                    f"TIN de PJ convertidos para IN no CRS v2: {result.organisation_tins_converted}",
+                    f"IN de PJ convertidos para TIN no CRS v3: {result.organisation_ins_converted}",
+                    f"Elementos exclusivos v3 removidos: {result.v3_only_elements_removed}",
+                    f"Elementos obrigatorios v3 adicionados: {result.v3_only_elements_added}",
                 ]
             )
         )

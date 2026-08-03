@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
 
-from crs_fatca_generator.models.domain import GenerationResult, ValidationIssue
+from crs_fatca_generator.models.domain import GenerationResult, Payment, ValidationIssue
 from crs_fatca_generator.models.mapping import MappingProfile, MappingRule
 from crs_fatca_generator.services.business_validator import BusinessValidator
 from crs_fatca_generator.services.crs_generator import CrsGenerator
@@ -108,6 +108,8 @@ class GenerationService:
             report = self.mapping_service.build_report(kind, report_rows, profile, file_hash, progress_callback=mapping_progress)
             if force_empty_accounts:
                 report.accounts = []
+            if kind == "crs":
+                self._apply_crs_closed_account_rules(report, profile)
             self._emit_progress(progress_callback, "Montando dados", kind_name, len(getattr(report, "accounts", [])), len(getattr(report, "accounts", [])), "")
             reports[kind] = report
             self._emit_progress(progress_callback, "Validando regras", kind_name, 0, 1, "")
@@ -205,6 +207,29 @@ class GenerationService:
         if kind == "crs":
             return "crs_pais_receptor_limite_mb_message_ref_unico_accountreport_inteiro"
         return "fatca_limite_mb_message_ref_unico"
+
+    def _apply_crs_closed_account_rules(self, report: object, profile: MappingProfile) -> None:
+        zero_balance = bool(getattr(profile.output, "crs_closed_account_zero_balance", True))
+        zero_payment = bool(getattr(profile.output, "crs_closed_account_zero_payment", True))
+        if not zero_balance and not zero_payment:
+            return
+        for account in getattr(report, "accounts", []):
+            if not _is_true_value(getattr(account, "closed_account", "")):
+                continue
+            if zero_balance:
+                account.account_balance = "0.00"
+                account.account_currency = "USD"
+            if zero_payment:
+                self._ensure_zero_closed_payment(account)
+
+    def _ensure_zero_closed_payment(self, account: object) -> None:
+        payments = getattr(account, "payments", [])
+        for payment in payments:
+            if getattr(payment, "payment_type", "") == "CRS501":
+                payment.amount = "0.00"
+                payment.currency = "USD"
+                return
+        payments.append(Payment("CRS501", "0.00", "USD"))
 
     def _flush_identifier_store(self) -> None:
         flush = getattr(self.mapping_service.identifier_store, "flush", None)

@@ -25,6 +25,7 @@ from crs_fatca_generator.services.data_preparation_service import DataPreparatio
 from crs_fatca_generator.services.xml_validator import XmlValidator
 from crs_fatca_generator.services.xml_helpers import CRS_NS
 from crs_fatca_generator.services.controlling_person_service import detect_controlling_person_blocks, extract_controlling_persons
+from crs_fatca_generator.services.crs_correction_service import CrsCorrectionService
 from crs_fatca_generator.services.xml_splitter_service import XmlSplitterService
 import crs_fatca_generator.services.data_preparation_service as preparation_module
 import crs_fatca_generator.services.xml_splitter_service as splitter_module
@@ -110,6 +111,199 @@ def test_crs_forcado_no_schema_v2(tmp_path: Path) -> None:
     assert "CrsXML_v3.0.xsd" not in raw_xml
     for v3_only in ("SelfCert", "DDProcedure", "AccountType", "JointAccount", "EquityInterestType"):
         assert tree.xpath(f"//*[local-name()='{v3_only}']") == []
+
+
+def test_regras_crs_conta_encerrada_zeram_saldo_e_adicionam_pagamento(tmp_path: Path) -> None:
+    profile = infer_default_profile(["DocumentoCliente", "Tipo de documento", "NumConta", "NomeCliente", "SaldoTotal", "Endereco", "Cidade", "Pais", "Closed Account?"])
+    profile.output.crs_path = str(tmp_path / "crs_encerrada.xml")
+    rows = [
+        {
+            "DocumentoCliente": "06360698501",
+            "Tipo de documento": "PF",
+            "NumConta": "ACC-CLOSED",
+            "NomeCliente": "Cliente Encerrado",
+            "SaldoTotal": "123.45",
+            "Endereco": "Rua A",
+            "Cidade": "Sao Paulo",
+            "Pais": "BR",
+            "Closed Account?": "true",
+            "_excel_row": 2,
+        }
+    ]
+
+    result = GenerationService(default_crs_schema(), default_fatca_schema()).generate(["crs"], rows, profile, Path("entrada.xlsx"), overwrite=True)[0]
+
+    assert result.valid is True
+    tree = etree.parse(str(tmp_path / "crs_encerrada.xml"))
+    account_number = tree.xpath("string(.//*[local-name()='AccountNumber'])")
+    assert account_number == "ACC CLOSED"
+    assert tree.xpath("string(.//*[local-name()='AccountNumber']/@ClosedAccount)") == "true"
+    assert tree.xpath("string(.//*[local-name()='AccountBalance'])") == "0.00"
+    assert tree.xpath("string(.//*[local-name()='AccountBalance']/@currCode)") == "USD"
+    payment = tree.xpath(".//*[local-name()='Payment']")
+    assert len(payment) == 1
+    assert tree.xpath("string(.//*[local-name()='Payment']/*[local-name()='Type'])") == "CRS501"
+    assert tree.xpath("string(.//*[local-name()='Payment']/*[local-name()='PaymentAmnt'])") == "0.00"
+    assert tree.xpath("string(.//*[local-name()='Payment']/*[local-name()='PaymentAmnt']/@currCode)") == "USD"
+
+
+def test_regra_opcional_crs_permite_nao_zerar_conta_encerrada(tmp_path: Path) -> None:
+    profile = infer_default_profile(["DocumentoCliente", "Tipo de documento", "NumConta", "NomeCliente", "SaldoTotal", "Endereco", "Cidade", "Pais", "Closed Account?"])
+    profile.output.crs_path = str(tmp_path / "crs_encerrada_sem_regra.xml")
+    profile.output.crs_closed_account_zero_balance = False
+    profile.output.crs_closed_account_zero_payment = False
+    rows = [
+        {
+            "DocumentoCliente": "06360698501",
+            "Tipo de documento": "PF",
+            "NumConta": "ACC-CLOSED",
+            "NomeCliente": "Cliente Encerrado",
+            "SaldoTotal": "123.45",
+            "Endereco": "Rua A",
+            "Cidade": "Sao Paulo",
+            "Pais": "BR",
+            "Closed Account?": "true",
+            "_excel_row": 2,
+        }
+    ]
+
+    result = GenerationService(default_crs_schema(), default_fatca_schema()).generate(["crs"], rows, profile, Path("entrada.xlsx"), overwrite=True)[0]
+
+    assert result.valid is True
+    tree = etree.parse(str(tmp_path / "crs_encerrada_sem_regra.xml"))
+    assert tree.xpath("string(.//*[local-name()='AccountBalance'])") == "123.45"
+    assert tree.xpath("count(.//*[local-name()='Payment'])") == 0
+
+
+def test_corrigir_crs_existente_com_oecd2_relaciona_docs_antigos(tmp_path: Path) -> None:
+    profile = infer_default_profile(["DocumentoCliente", "Tipo de documento", "NumConta", "NomeCliente", "SaldoTotal", "Endereco", "Cidade", "Pais", "Closed Account?"])
+    profile.output.crs_path = str(tmp_path / "crs_original.xml")
+    profile.output.crs_closed_account_zero_balance = False
+    profile.output.crs_closed_account_zero_payment = False
+    rows = [
+        {
+            "DocumentoCliente": "06360698501",
+            "Tipo de documento": "PF",
+            "NumConta": "ACC-CLOSED",
+            "NomeCliente": "Cliente Encerrado",
+            "SaldoTotal": "123.45",
+            "Endereco": "Rua A",
+            "Cidade": "Sao Paulo",
+            "Pais": "BR",
+            "Closed Account?": "true",
+            "_excel_row": 2,
+        }
+    ]
+    result = GenerationService(default_crs_schema(), default_fatca_schema()).generate(["crs"], rows, profile, Path("entrada.xlsx"), overwrite=True)[0]
+    assert result.valid is True
+    original = etree.parse(str(tmp_path / "crs_original.xml"))
+    old_message_ref = original.xpath("string(.//*[local-name()='MessageRefId'])")
+    old_doc_refs = original.xpath(".//*[local-name()='AccountReport']//*[local-name()='DocSpec']/*[local-name()='DocRefId']/text()")
+
+    correction = CrsCorrectionService().correct_file(tmp_path / "crs_original.xml", tmp_path / "crs_corrigido.xml", "CRS v2", "OECD2", True, True)
+
+    assert correction.validation_errors == 0
+    assert correction.old_message_ref_id == old_message_ref
+    corrected = etree.parse(str(tmp_path / "crs_corrigido.xml"))
+    assert etree.QName(corrected.getroot()).namespace == "urn:oecd:ties:crs:v2"
+    assert corrected.getroot().get("version") == "2.0"
+    assert corrected.xpath("string(.//*[local-name()='MessageRefId'])") != old_message_ref
+    assert corrected.xpath("string(.//*[local-name()='MessageTypeIndic'])") == "CRS702"
+    assert corrected.xpath("count(.//*[local-name()='MessageSpec']/*[local-name()='CorrMessageRefId'])") == 0
+    assert set(corrected.xpath(".//*[local-name()='DocTypeIndic']/text()")) == {"OECD0", "OECD2"}
+    assert corrected.xpath(".//*[local-name()='DocSpec']/*[local-name()='CorrDocRefId']/text()") == old_doc_refs
+    assert corrected.xpath("count(.//*[local-name()='DocSpec']/*[local-name()='CorrMessageRefId'])") == 0
+    assert corrected.xpath("string(.//*[local-name()='AccountBalance'])") == "0.00"
+    assert corrected.xpath("string(.//*[local-name()='Payment']/*[local-name()='Type'])") == "CRS501"
+
+
+def test_corrigir_crs_com_excel_de_erros_corrige_apenas_ky_correspondente(tmp_path: Path) -> None:
+    profile = infer_default_profile(["DocumentoCliente", "Tipo de documento", "NumConta", "NomeCliente", "SaldoTotal", "Endereco", "Cidade", "Pais", "Closed Account?"])
+    profile.output.crs_path = str(tmp_path / "crs_original.xml")
+    profile.output.crs_closed_account_zero_balance = False
+    profile.output.crs_closed_account_zero_payment = False
+    rows = [
+        {"DocumentoCliente": "06360698501", "Tipo de documento": "PF", "NumConta": "ACC-1", "NomeCliente": "Cliente Um", "SaldoTotal": "123.45", "Endereco": "Rua A", "Cidade": "Sao Paulo", "Pais": "BR", "Closed Account?": "true", "_excel_row": 2},
+        {"DocumentoCliente": "11144477735", "Tipo de documento": "PF", "NumConta": "ACC-2", "NomeCliente": "Cliente Dois", "SaldoTotal": "222.22", "Endereco": "Rua B", "Cidade": "Rio", "Pais": "BR", "Closed Account?": "true", "_excel_row": 3},
+    ]
+    result = GenerationService(default_crs_schema(), default_fatca_schema()).generate(["crs"], rows, profile, Path("entrada.xlsx"), overwrite=True)[0]
+    assert result.valid is True
+    original = etree.parse(str(tmp_path / "crs_original.xml"))
+    target_doc_ref = original.xpath(".//*[local-name()='AccountReport'][1]//*[local-name()='DocSpec']/*[local-name()='DocRefId']/text()")[0]
+    ignored_doc_ref = original.xpath(".//*[local-name()='AccountReport'][2]//*[local-name()='DocSpec']/*[local-name()='DocRefId']/text()")[0]
+    errors_path = tmp_path / "erros_crs.xlsx"
+    workbook = openpyxl.Workbook()
+    sheet = workbook.active
+    sheet.title = "Arquivo 1"
+    sheet.append(["Code", "Message"])
+    sheet.append(["CRS0024", f"For Document Reference ID {target_doc_ref} a closed account must have a zero balance."])
+    sheet2 = workbook.create_sheet("Arquivo 2")
+    sheet2.append(["Code", "Message"])
+    sheet2.append(["KY0008", f"For Document Reference ID KY2025BRFI107442KY25999999 payment information must be provided where the AccountClosed element is true."])
+    workbook.save(errors_path)
+    data_path = tmp_path / "dados.xlsx"
+    data_workbook = openpyxl.Workbook()
+    data_workbook.active.append(["DocumentoCliente", "NumConta"])
+    data_workbook.save(data_path)
+
+    correction = CrsCorrectionService().correct_file(
+        tmp_path / "crs_original.xml",
+        tmp_path / "crs_corrigido.xml",
+        "CRS v2",
+        "OECD2",
+        True,
+        True,
+        data_path,
+        errors_path,
+    )
+
+    assert correction.validation_errors == 0
+    assert correction.target_doc_refs == 2
+    assert correction.matched_doc_refs == 1
+    assert correction.unmatched_doc_refs == 1
+    assert correction.account_reports_removed == 1
+    corrected = etree.parse(str(tmp_path / "crs_corrigido.xml"))
+    assert corrected.xpath("count(.//*[local-name()='AccountReport'])") == 1
+    assert corrected.xpath("string(.//*[local-name()='AccountReport']//*[local-name()='CorrDocRefId'])") == target_doc_ref
+    assert ignored_doc_ref not in corrected.xpath(".//*[local-name()='CorrDocRefId']/text()")
+    assert corrected.xpath("string(.//*[local-name()='AccountBalance'])") == "0.00"
+    assert corrected.xpath("string(.//*[local-name()='Payment']/*[local-name()='Type'])") == "CRS501"
+
+
+def test_corrigir_crs_existente_para_v3_adiciona_campos_obrigatorios(tmp_path: Path) -> None:
+    profile = infer_default_profile(["DocumentoCliente", "Tipo de documento", "NumConta", "NomeCliente", "SaldoTotal", "Endereco", "Cidade", "Pais", "Closed Account?"])
+    profile.output.crs_path = str(tmp_path / "crs_original_v2.xml")
+    rows = [
+        {
+            "DocumentoCliente": "11222333000181",
+            "Tipo de documento": "PJ",
+            "NumConta": "ACC-CLOSED",
+            "NomeCliente": "Empresa Encerrada",
+            "SaldoTotal": "123.45",
+            "Endereco": "Rua A",
+            "Cidade": "Sao Paulo",
+            "Pais": "BR",
+            "Closed Account?": "true",
+            "_excel_row": 2,
+        }
+    ]
+    result = GenerationService(default_crs_schema(), default_fatca_schema()).generate(["crs"], rows, profile, Path("entrada.xlsx"), overwrite=True)[0]
+    assert result.valid is True
+
+    correction = CrsCorrectionService().correct_file(tmp_path / "crs_original_v2.xml", tmp_path / "crs_corrigido_v3.xml", "CRS v3", "OECD2", True, True)
+
+    assert correction.validation_errors == 0
+    assert correction.crs_version == "v3"
+    corrected = etree.parse(str(tmp_path / "crs_corrigido_v3.xml"))
+    raw_xml = (tmp_path / "crs_corrigido_v3.xml").read_text(encoding="utf-8")
+    assert etree.QName(corrected.getroot()).namespace == "urn:oecd:ties:crs:v3"
+    assert corrected.getroot().get("version") == "3.0"
+    assert "CrsXML_v3.0.xsd" in raw_xml
+    assert corrected.xpath("count(.//*[local-name()='SelfCert'])") >= 1
+    assert corrected.xpath("count(.//*[local-name()='DDProcedure'])") == 1
+    assert corrected.xpath("count(.//*[local-name()='AccountType'])") == 1
+    assert corrected.xpath("count(.//*[local-name()='AccountHolder']/*[local-name()='Organisation']/*[local-name()='TIN'])") == 1
+    assert corrected.xpath("count(.//*[local-name()='AccountHolder']/*[local-name()='Organisation']/*[local-name()='IN'])") == 0
 
 
 def test_geracao_crs_e_fatca_repetida_nao_colide_com_historico_local(tmp_path: Path) -> None:
