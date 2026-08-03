@@ -270,6 +270,48 @@ def test_corrigir_crs_com_excel_de_erros_corrige_apenas_ky_correspondente(tmp_pa
     assert corrected.xpath("string(.//*[local-name()='Payment']/*[local-name()='Type'])") == "CRS501"
 
 
+def test_corrigir_crs_forcando_todos_accountreports_como_oecd2(tmp_path: Path) -> None:
+    profile = infer_default_profile(["DocumentoCliente", "Tipo de documento", "NumConta", "NomeCliente", "SaldoTotal", "Endereco", "Cidade", "Pais", "Closed Account?"])
+    profile.output.crs_path = str(tmp_path / "crs_original.xml")
+    profile.output.crs_closed_account_zero_balance = False
+    profile.output.crs_closed_account_zero_payment = False
+    rows = [
+        {"DocumentoCliente": "06360698501", "Tipo de documento": "PF", "NumConta": "ACC-1", "NomeCliente": "Cliente Um", "SaldoTotal": "123.45", "Endereco": "Rua A", "Cidade": "Sao Paulo", "Pais": "BR", "Closed Account?": "true", "_excel_row": 2},
+        {"DocumentoCliente": "11144477735", "Tipo de documento": "PF", "NumConta": "ACC-2", "NomeCliente": "Cliente Dois", "SaldoTotal": "222.22", "Endereco": "Rua B", "Cidade": "Rio", "Pais": "BR", "Closed Account?": "true", "_excel_row": 3},
+    ]
+    result = GenerationService(default_crs_schema(), default_fatca_schema()).generate(["crs"], rows, profile, Path("entrada.xlsx"), overwrite=True)[0]
+    assert result.valid is True
+    original = etree.parse(str(tmp_path / "crs_original.xml"))
+    account_doc_refs = original.xpath(".//*[local-name()='AccountReport']//*[local-name()='DocSpec']/*[local-name()='DocRefId']/text()")
+    errors_path = tmp_path / "erros_crs.xlsx"
+    workbook = openpyxl.Workbook()
+    sheet = workbook.active
+    sheet.append(["Code", "Message"])
+    sheet.append(["CRS0024", f"For Document Reference ID {account_doc_refs[0]} a closed account must have a zero balance."])
+    workbook.save(errors_path)
+
+    correction = CrsCorrectionService().correct_file(
+        tmp_path / "crs_original.xml",
+        tmp_path / "crs_corrigido.xml",
+        "CRS v2",
+        "OECD2",
+        True,
+        True,
+        None,
+        errors_path,
+        True,
+    )
+
+    assert correction.validation_errors == 0
+    assert correction.force_all_account_reports_oecd2 is True
+    assert correction.account_reports_removed == 0
+    corrected = etree.parse(str(tmp_path / "crs_corrigido.xml"))
+    assert corrected.xpath("count(.//*[local-name()='AccountReport'])") == 2
+    assert corrected.xpath("count(.//*[local-name()='AccountReport']//*[local-name()='DocTypeIndic'][text()='OECD2'])") == 2
+    assert sorted(corrected.xpath(".//*[local-name()='AccountReport']//*[local-name()='CorrDocRefId']/text()")) == sorted(account_doc_refs)
+    assert corrected.xpath("count(.//*[local-name()='ReportingFI']//*[local-name()='DocTypeIndic'][text()='OECD0'])") == 1
+
+
 def test_corrigir_crs_existente_para_v3_adiciona_campos_obrigatorios(tmp_path: Path) -> None:
     profile = infer_default_profile(["DocumentoCliente", "Tipo de documento", "NumConta", "NomeCliente", "SaldoTotal", "Endereco", "Cidade", "Pais", "Closed Account?"])
     profile.output.crs_path = str(tmp_path / "crs_original_v2.xml")

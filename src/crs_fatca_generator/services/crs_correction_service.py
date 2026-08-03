@@ -67,6 +67,7 @@ class CrsCorrectionResult:
     reporting_fi_resent: int = 0
     message_type_indic: str = ""
     unknown_error_codes: int = 0
+    force_all_account_reports_oecd2: bool = False
 
 
 class CrsCorrectionService:
@@ -80,6 +81,7 @@ class CrsCorrectionService:
         add_zero_payment_for_closed: bool = True,
         data_excel_path: Path | None = None,
         errors_excel_path: Path | None = None,
+        force_all_account_reports_oecd2: bool = False,
     ) -> CrsCorrectionResult:
         if not input_path.exists():
             raise FileNotFoundError(f"XML CRS nao encontrado: {input_path}")
@@ -103,6 +105,7 @@ class CrsCorrectionService:
         result = CrsCorrectionResult(input_path, target, version, doc_type, old_message_ref, new_message_ref)
         result.data_excel_path = data_excel_path
         result.errors_excel_path = errors_excel_path
+        result.force_all_account_reports_oecd2 = bool(force_all_account_reports_oecd2 and doc_type == "OECD2")
         result.error_rows_loaded = sum(len(item.rows) for item in error_instructions.values())
         result.error_rules_mapped = sum(len(item.codes) for item in error_instructions.values())
         result.target_doc_refs = len(target_doc_refs)
@@ -113,15 +116,17 @@ class CrsCorrectionService:
         else:
             result.v3_only_elements_removed = self._remove_v3_only_elements(root)
             result.organisation_tins_converted = self._convert_organisation_tin_to_in(root)
-        if doc_type == "OECD2" and target_doc_refs:
+        if doc_type == "OECD2" and target_doc_refs and not result.force_all_account_reports_oecd2:
             result.account_reports_removed = self._remove_untargeted_account_reports(root, target_doc_refs)
         if error_instructions:
             matched = self._apply_error_instruction_rules(root, result, error_instructions, zero_closed_balance, add_zero_payment_for_closed)
             result.matched_doc_refs = len(matched)
             result.unmatched_doc_refs = len(target_doc_refs - matched)
+            if result.force_all_account_reports_oecd2 and (zero_closed_balance or add_zero_payment_for_closed):
+                self._apply_closed_account_rules(root, result, zero_closed_balance, add_zero_payment_for_closed, matched)
         elif zero_closed_balance or add_zero_payment_for_closed:
             self._apply_closed_account_rules(root, result, zero_closed_balance, add_zero_payment_for_closed)
-        self._set_doc_specs(root, result, target_doc_refs)
+        self._set_doc_specs(root, result, set() if result.force_all_account_reports_oecd2 else target_doc_refs)
         sanitize_xml_tree(root)
         atomic_write(etree.ElementTree(root), target, True)
         result.validation_errors = len(XmlValidator().validate_file(target, _schema_for_version(version), "crs"))
@@ -262,8 +267,12 @@ class CrsCorrectionService:
         result: CrsCorrectionResult,
         zero_closed_balance: bool,
         add_zero_payment_for_closed: bool,
+        skip_doc_refs: set[str] | None = None,
     ) -> None:
+        skip_doc_refs = skip_doc_refs or set()
         for account in root.xpath(".//*[local-name()='AccountReport']"):
+            if _doc_ref_for_correctable(account) in skip_doc_refs:
+                continue
             account_number = _first(account, "./*[local-name()='AccountNumber']")
             if account_number is None or not _is_true(account_number.get("ClosedAccount")):
                 continue

@@ -55,3 +55,4 @@
 - Adiciona aba Corrigir CRS para corrigir um XML existente, escolher saida CRS v2 ou CRS v3 e gerar `OECD1` ou `OECD2` com relacionamento de correcao por `CorrDocRefId` quando aplicavel.
 - Ajusta o modo CRS `OECD2`: `MessageTypeIndic` passa para `CRS702`, `MessageRefId` e `DocRefId` corrigidos ficam novos, `CorrDocRefId` aponta para o documento original e o `ReportingFI` e reenviado como `OECD0`.
 - A aba Corrigir CRS agora permite selecionar o Excel de dados e o Excel de erros; o app le todas as abas do Excel de erros, extrai os `DocRefId` KY e aplica `CRS0024`/`KY0008` somente nos registros correspondentes.
+- Adiciona opcao na aba Corrigir CRS para forcar todos os `AccountReport` do XML selecionado como `OECD2`, mantendo `ReportingFI` como `OECD0` e criando `CorrDocRefId` para cada registro.

@@ -593,6 +593,8 @@ class MainWindow(QMainWindow):
         self.crs_fix_zero_balance_check.setChecked(True)
         self.crs_fix_zero_payment_check = QCheckBox("Conta encerrada gera Payment CRS501 de 0.00 USD")
         self.crs_fix_zero_payment_check.setChecked(True)
+        self.crs_fix_force_all_oecd2_check = QCheckBox("Forcar todos os AccountReport como OECD2")
+        self.crs_fix_force_all_oecd2_check.setChecked(False)
         form.addRow("XML CRS", input_row)
         form.addRow("Destino", output_row)
         form.addRow("Excel com dados", data_excel_row)
@@ -601,6 +603,7 @@ class MainWindow(QMainWindow):
         form.addRow("DocTypeIndic", self.crs_fix_doc_type_combo)
         form.addRow("Regra CRS", self.crs_fix_zero_balance_check)
         form.addRow("Regra CRS", self.crs_fix_zero_payment_check)
+        form.addRow("Regra CRS", self.crs_fix_force_all_oecd2_check)
         layout.addLayout(form)
         fix_btn = QPushButton("Corrigir CRS")
         fix_btn.clicked.connect(self.correct_crs_xml)
@@ -1151,6 +1154,7 @@ class MainWindow(QMainWindow):
                 self.crs_fix_zero_payment_check.isChecked(),
                 data_excel_path,
                 errors_excel_path,
+                self.crs_fix_force_all_oecd2_check.isChecked(),
             )
         except Exception as exc:
             self.crs_fix_progress.setRange(0, 100)
@@ -1174,6 +1178,7 @@ class MainWindow(QMainWindow):
                     f"MessageRefId novo: {result.new_message_ref_id}",
                     f"Excel com dados: {result.data_excel_path or '-'}",
                     f"Excel com erros: {result.errors_excel_path or '-'}",
+                    f"Forcar todos AccountReport como OECD2: {'sim' if result.force_all_account_reports_oecd2 else 'nao'}",
                     f"Linhas de erro lidas: {result.error_rows_loaded}",
                     f"KY alvo no Excel de erros: {result.target_doc_refs}",
                     f"KY encontrados no XML: {result.matched_doc_refs}",
